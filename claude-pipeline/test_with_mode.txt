@@ -1,0 +1,3 @@
+MODE: SUMMARIZE
+
+Please provide a summary of the number 42.

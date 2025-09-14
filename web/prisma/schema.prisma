@@ -1,0 +1,578 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [uuid_ossp(map: "uuid-ossp")]
+}
+
+model PodcastEpisode {
+  id                         Int                          @id @default(autoincrement())
+  title                      String                       @db.VarChar(255)
+  uploadedAt                 DateTime                     @default(now()) @map("uploaded_at")
+  publishedAt                DateTime?                    @map("published_at")
+  transcriptText             String?                      @map("transcript_text")
+  summaryText                String?                      @map("summary_text")
+  summaryData                Json?                        @map("summary_data")
+  keywords                   Json?
+  status                     String                       @default("no_transcript") @db.VarChar(50)
+  videoUrl                   String?                      @map("video_url")
+  episodeDir                 String?                      @map("episode_dir") @db.VarChar(255)
+  claudeEpisodeDir           String?                      @map("claude_episode_dir") @db.VarChar(255)
+  claudeContextGenerated     Boolean                      @default(false) @map("claude_context_generated")
+  claudePipelineStatus       String?                      @map("claude_pipeline_status") @db.VarChar(50)
+  pipelineType               String                       @default("legacy") @map("pipeline_type") @db.VarChar(20)
+  lastValidationAt           DateTime?                    @map("last_validation_at")
+  lastValidationScore        Int?                         @map("last_validation_score")
+  pipelineConfiguration      Json                         @default("{}") @map("pipeline_configuration")
+  createdAt                  DateTime                     @default(now()) @map("created_at")
+  updatedAt                  DateTime                     @updatedAt @map("updated_at")
+  claudePipelineRuns         ClaudePipelineRun[]
+  episodeContexts            EpisodeContext[]
+  keyword_search_cache       keyword_search_cache[]
+  keywords_entries           Keyword[]
+  pipelineConfigurations     PipelineConfiguration[]
+  pipelineErrors             PipelineError[]
+  pipelinePerformanceMetrics PipelinePerformanceMetrics[]
+  pipelineRecoveryActions    PipelineRecoveryAction[]
+  pipelineResourceUsage      PipelineResourceUsage[]
+  pipelineRuns               PipelineRun[]
+  pipelineStageMetrics       PipelineStageMetrics[]
+  pipelineValidations        PipelineValidation[]
+  tweetQueues                TweetQueue[]
+  responseRequests           TweetResponseRequest[]
+  tweets                     Tweet[]
+
+  @@map("podcast_episodes")
+}
+
+model Tweet {
+  id                      Int             @id @default(autoincrement())
+  twitterId               String          @unique @map("twitter_id") @db.VarChar(50)
+  authorHandle            String          @map("author_handle") @db.VarChar(100)
+  authorName              String?         @map("author_name") @db.VarChar(255)
+  fullText                String          @map("full_text")
+  textPreview             String?         @map("text_preview") @db.VarChar(280)
+  relevanceScore          Float?          @map("relevance_score")
+  classificationRationale String?         @map("classification_rationale")
+  status                  String          @default("unclassified") @db.VarChar(20)
+  threadData              Json?           @map("thread_data")
+  metrics                 Json?
+  flags                   Json?
+  scrapedAt               DateTime        @default(now()) @map("scraped_at")
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
+  episodeId               Int?            @map("episode_id")
+  queue_id                Int?
+  search_keywords         String[]
+  last_search_date        DateTime?       @db.Timestamp(6)
+  drafts                  DraftReply[]
+  episode                 PodcastEpisode? @relation(fields: [episodeId], references: [id])
+  tweet_queue             TweetQueue?     @relation(fields: [queue_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status])
+  @@index([twitterId])
+  @@index([createdAt(sort: Desc)])
+  @@map("tweets")
+}
+
+model DraftReply {
+  id              Int         @id @default(autoincrement())
+  tweetId         Int         @map("tweet_id")
+  modelName       String      @map("model_name") @db.VarChar(50)
+  promptVersion   String?     @map("prompt_version") @db.VarChar(50)
+  text            String
+  status          String      @default("pending") @db.VarChar(20)
+  styleScore      Float?      @map("style_score")
+  toxicityScore   Float?      @map("toxicity_score")
+  characterCount  Int?        @map("character_count")
+  version         Int         @default(1)
+  superseded      Boolean     @default(false)
+  approvedBy      String?     @map("approved_by") @db.VarChar(100)
+  approvedAt      DateTime?   @map("approved_at")
+  rejectedBy      String?     @map("rejected_by") @db.VarChar(100)
+  rejectedAt      DateTime?   @map("rejected_at")
+  rejectionReason String?     @map("rejection_reason")
+  scheduledFor    DateTime?   @map("scheduled_for")
+  postedAt        DateTime?   @map("posted_at")
+  twitterReplyId  String?     @map("twitter_reply_id") @db.VarChar(50)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  edits           DraftEdit[]
+  tweet           Tweet       @relation(fields: [tweetId], references: [id], onDelete: Cascade)
+
+  @@index([tweetId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("draft_replies")
+}
+
+model DraftEdit {
+  id               Int        @id @default(autoincrement())
+  draftId          Int        @map("draft_id")
+  version          Int
+  text             String
+  editedBy         String?    @map("edited_by") @db.VarChar(100)
+  editedAt         DateTime   @default(now()) @map("edited_at")
+  diffFromPrevious Json?      @map("diff_from_previous")
+  draft            DraftReply @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@map("draft_edits")
+}
+
+model Keyword {
+  id        Int             @id @default(autoincrement())
+  episodeId Int?            @map("episode_id")
+  keyword   String          @db.VarChar(100)
+  weight    Float           @default(1.0)
+  frequency Int             @default(0)
+  enabled   Boolean         @default(true)
+  source    String          @default("manual") @db.VarChar(20)
+  lastUsed  DateTime?       @map("last_used")
+  createdAt DateTime        @default(now()) @map("created_at")
+  episode   PodcastEpisode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([episodeId, keyword])
+  @@index([episodeId])
+  @@index([frequency(sort: Desc)])
+  @@map("keywords")
+}
+
+model QuotaUsage {
+  id              Int      @id @default(autoincrement())
+  periodStart     DateTime @map("period_start") @db.Date
+  periodEnd       DateTime @map("period_end") @db.Date
+  totalAllowed    Int      @default(10000) @map("total_allowed")
+  used            Int      @default(0)
+  sourceBreakdown Json?    @map("source_breakdown")
+  dailyUsage      Json?    @map("daily_usage")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([periodStart, periodEnd])
+  @@map("quota_usage")
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  userId       String?  @map("user_id") @db.VarChar(100)
+  action       String   @db.VarChar(50)
+  resourceType String?  @map("resource_type") @db.VarChar(50)
+  resourceId   Int?     @map("resource_id")
+  oldValue     Json?    @map("old_value")
+  newValue     Json?    @map("new_value")
+  metadata     Json?
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+model PipelineRun {
+  id                  Int             @id @default(autoincrement())
+  runId               String          @unique @map("run_id") @db.VarChar(255)
+  episodeId           Int?            @map("episode_id")
+  stage               String          @db.VarChar(50)
+  status              String          @default("running") @db.VarChar(20)
+  currentStage        String?         @map("current_stage") @db.VarChar(100)
+  progress            Int             @default(0)
+  estimatedCompletion DateTime?       @map("estimated_completion")
+  startedAt           DateTime        @default(now()) @map("started_at")
+  completedAt         DateTime?       @map("completed_at")
+  errorMessage        String?         @map("error_message")
+  metrics             Json?
+  metadata            Json            @default("{}")
+  artifactsPath       String?         @map("artifacts_path") @db.VarChar(255)
+  errors              PipelineError[] @relation("PipelineRunErrors")
+  episode             PodcastEpisode? @relation(fields: [episodeId], references: [id])
+
+  @@index([status])
+  @@index([currentStage])
+  @@index([progress])
+  @@index([startedAt(sort: Desc)])
+  @@map("pipeline_runs")
+}
+
+model Setting {
+  key         String   @id @db.VarChar(100)
+  value       Json
+  description String?
+  updatedAt   DateTime @default(now()) @map("updated_at")
+  updatedBy   String?  @map("updated_by") @db.VarChar(100)
+
+  @@map("settings")
+}
+
+model PromptTemplate {
+  id          Int             @id @default(autoincrement())
+  key         String          @unique @db.VarChar(50)
+  stage       String?         @db.VarChar(50)
+  name        String          @db.VarChar(100)
+  description String?
+  template    String
+  variables   Json?
+  isActive    Boolean         @default(true)
+  version     Int             @default(1)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  createdBy   String?         @map("created_by") @db.VarChar(100)
+  history     PromptHistory[]
+
+  @@index([stage])
+  @@map("prompt_templates")
+}
+
+model PromptHistory {
+  id         Int            @id @default(autoincrement())
+  promptId   Int            @map("prompt_id")
+  version    Int
+  template   String
+  changedBy  String?        @map("changed_by") @db.VarChar(100)
+  changeNote String?        @map("change_note")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  prompt     PromptTemplate @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([promptId])
+  @@index([createdAt(sort: Desc)])
+  @@map("prompt_history")
+}
+
+model PromptOriginal {
+  stage       String   @id @db.VarChar(50)
+  content     String
+  filePath    String   @map("file_path") @db.VarChar(255)
+  backedUpAt  DateTime @default(now()) @map("backed_up_at")
+
+  @@map("prompt_originals")
+}
+
+model ContextFile {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?
+  content     String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by") @db.VarChar(100)
+
+  @@map("context_files")
+}
+
+model TweetQueue {
+  id          Int             @id @default(autoincrement())
+  tweetId     String          @unique @map("tweet_id") @db.VarChar(100)
+  twitterId   String          @map("twitter_id") @db.VarChar(50)
+  source      String          @db.VarChar(50)
+  priority    Int             @default(0)
+  status      String          @default("pending") @db.VarChar(20)
+  episodeId   Int?            @map("episode_id")
+  addedBy     String?         @map("added_by") @db.VarChar(100)
+  addedAt     DateTime        @default(now()) @map("added_at")
+  processedAt DateTime?       @map("processed_at")
+  metadata    Json?
+  retryCount  Int             @default(0) @map("retry_count")
+  episode     PodcastEpisode? @relation(fields: [episodeId], references: [id])
+  tweets      Tweet[]
+
+  @@index([status, priority, addedAt])
+  @@index([twitterId])
+  @@index([status, priority(sort: Desc), addedAt], map: "idx_tweet_queue_status_priority")
+  @@map("tweet_queue")
+}
+
+model TweetResponseRequest {
+  id                Int             @id @default(autoincrement())
+  tweetUrl          String          @map("tweet_url") @db.VarChar(500)
+  tweetId           String?         @map("tweet_id") @db.VarChar(50)
+  tweetText         String?         @map("tweet_text")
+  requestedBy       String?         @map("requested_by") @db.VarChar(100)
+  requestedAt       DateTime        @default(now()) @map("requested_at")
+  responseGenerated String?         @map("response_generated")
+  status            String          @default("pending") @db.VarChar(20)
+  episodeContextId  Int?            @map("episode_context_id")
+  approved          Boolean         @default(false)
+  approvedAt        DateTime?       @map("approved_at")
+  published         Boolean         @default(false)
+  publishedAt       DateTime?       @map("published_at")
+  errorMessage      String?         @map("error_message")
+  episode           PodcastEpisode? @relation(fields: [episodeContextId], references: [id])
+
+  @@index([status])
+  @@index([requestedAt])
+  @@map("tweet_response_requests")
+}
+
+model ScrapingSession {
+  id           Int       @id @default(autoincrement())
+  sessionId    String    @unique @map("session_id") @db.VarChar(100)
+  startedAt    DateTime  @default(now()) @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  apiCallsUsed Int       @default(0) @map("api_calls_used")
+  tweetsFound  Int       @default(0) @map("tweets_found")
+  tweetsCached Int       @default(0) @map("tweets_cached")
+  tweetsNew    Int       @default(0) @map("tweets_new")
+  keywordsUsed Json?     @map("keywords_used")
+  parameters   Json?
+  errorLog     Json?     @map("error_log")
+  status       String    @default("running") @db.VarChar(20)
+
+  @@index([startedAt])
+  @@index([startedAt], map: "idx_scraping_sessions_started_at")
+  @@map("scraping_sessions")
+}
+
+model MonitoringAlert {
+  id          Int       @id @default(autoincrement())
+  alertType   String    @map("alert_type") @db.VarChar(50)
+  severity    String    @db.VarChar(20)
+  message     String
+  triggeredAt DateTime  @default(now()) @map("triggered_at")
+  resolvedAt  DateTime? @map("resolved_at")
+  metadata    Json?
+
+  @@index([alertType])
+  @@index([triggeredAt])
+  @@index([resolvedAt])
+  @@index([resolvedAt], map: "idx_monitoring_alerts_resolved")
+  @@index([triggeredAt], map: "idx_monitoring_alerts_triggered")
+  @@index([alertType], map: "idx_monitoring_alerts_type")
+  @@map("monitoring_alerts")
+}
+
+model ClaudePipelineRun {
+  id              Int            @id @default(autoincrement())
+  episodeId       Int            @map("episode_id")
+  runId           String         @unique @map("run_id") @db.VarChar(255)
+  stage           String         @db.VarChar(50)
+  claudeMode      String         @map("claude_mode") @db.VarChar(20)
+  inputTokens     Int            @default(0) @map("input_tokens")
+  outputTokens    Int            @default(0) @map("output_tokens")
+  costUsd         Decimal        @default(0) @map("cost_usd") @db.Decimal(10, 4)
+  durationSeconds Int?           @map("duration_seconds")
+  status          String         @default("running") @db.VarChar(20)
+  errorMessage    String?        @map("error_message")
+  startedAt       DateTime       @default(now()) @map("started_at")
+  completedAt     DateTime?      @map("completed_at")
+  metadata        Json?
+  episode         PodcastEpisode @relation(fields: [episodeId], references: [id])
+
+  @@index([episodeId])
+  @@index([status])
+  @@index([startedAt(sort: Desc)])
+  @@map("claude_pipeline_runs")
+}
+
+model ClaudeCost {
+  id                Int      @id @default(autoincrement())
+  date              DateTime @db.Date
+  mode              String   @db.VarChar(20)
+  totalInputTokens  BigInt   @default(0) @map("total_input_tokens")
+  totalOutputTokens BigInt   @default(0) @map("total_output_tokens")
+  totalCostUsd      Decimal  @default(0) @map("total_cost_usd") @db.Decimal(10, 4)
+  runCount          Int      @default(0) @map("run_count")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([date, mode])
+  @@index([date])
+  @@map("claude_costs")
+}
+
+model EpisodeContext {
+  id             Int            @id @default(autoincrement())
+  episodeId      Int            @map("episode_id")
+  contextType    String         @map("context_type") @db.VarChar(50)
+  contextContent String         @map("context_content")
+  claudeMode     String?        @map("claude_mode") @db.VarChar(20)
+  version        Int            @default(1)
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  episode        PodcastEpisode @relation(fields: [episodeId], references: [id])
+
+  @@index([episodeId])
+  @@index([contextType])
+  @@map("episode_contexts")
+}
+
+model PipelineError {
+  id              Int            @id @default(autoincrement())
+  episodeId       Int            @map("episode_id")
+  runId           String         @map("run_id") @db.VarChar(255)
+  stage           String         @db.VarChar(100)
+  errorType       String         @map("error_type") @db.VarChar(100)
+  errorMessage    String         @map("error_message")
+  stackTrace      String?        @map("stack_trace")
+  attemptNumber   Int            @default(1) @map("attempt_number")
+  systemState     Json?          @map("system_state")
+  suggestedAction Json?          @map("suggested_action")
+  timestamp       DateTime       @default(now())
+  createdAt       DateTime       @default(now()) @map("created_at")
+  episode         PodcastEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  pipelineRun     PipelineRun    @relation("PipelineRunErrors", fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([episodeId])
+  @@index([runId])
+  @@index([stage])
+  @@index([errorType])
+  @@index([timestamp])
+  @@map("pipeline_errors")
+}
+
+model PipelineValidation {
+  id                      Int            @id @default(autoincrement())
+  episodeId               Int            @map("episode_id")
+  pipelineType            String         @map("pipeline_type") @db.VarChar(50)
+  isValid                 Boolean        @map("is_valid")
+  score                   Int            @db.SmallInt
+  validationResults       Json           @map("validation_results")
+  estimatedResolutionTime Int            @default(0) @map("estimated_resolution_time")
+  createdAt               DateTime       @default(now()) @map("created_at")
+  episode                 PodcastEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId])
+  @@index([pipelineType])
+  @@index([isValid])
+  @@index([createdAt])
+  @@map("pipeline_validations")
+}
+
+model PipelineStageMetrics {
+  id             Int            @id @default(autoincrement())
+  runId          String         @map("run_id") @db.VarChar(255)
+  stage          String         @db.VarChar(100)
+  episodeId      Int            @map("episode_id")
+  itemsProcessed Int            @default(0) @map("items_processed")
+  totalItems     Int            @default(0) @map("total_items")
+  processingRate Decimal        @default(0) @map("processing_rate") @db.Decimal(10, 4)
+  apiCallsUsed   Int            @default(0) @map("api_calls_used")
+  tokensUsed     Int            @default(0) @map("tokens_used")
+  costIncurred   Decimal        @default(0) @map("cost_incurred") @db.Decimal(10, 6)
+  memoryUsed     Int            @default(0) @map("memory_used")
+  cpuUsage       Decimal        @default(0) @map("cpu_usage") @db.Decimal(5, 2)
+  startTime      DateTime?      @map("start_time")
+  endTime        DateTime?      @map("end_time")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  episode        PodcastEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([episodeId])
+  @@index([stage])
+  @@index([createdAt])
+  @@map("pipeline_stage_metrics")
+}
+
+model PipelineConfiguration {
+  id                Int             @id @default(autoincrement())
+  episodeId         Int?            @map("episode_id")
+  configurationType String          @map("configuration_type") @db.VarChar(100)
+  configurationData Json            @map("configuration_data")
+  version           Int             @default(1)
+  isActive          Boolean         @default(true) @map("is_active")
+  appliedAt         DateTime?       @map("applied_at")
+  createdBy         String          @default("system") @map("created_by") @db.VarChar(255)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  episode           PodcastEpisode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId])
+  @@index([configurationType])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("pipeline_configurations")
+}
+
+model PipelinePerformanceMetrics {
+  id                  Int             @id @default(autoincrement())
+  stage               String          @db.VarChar(100)
+  pipelineType        String          @map("pipeline_type") @db.VarChar(50)
+  durationMinutes     Decimal         @map("duration_minutes") @db.Decimal(10, 4)
+  success             Boolean
+  itemsProcessed      Int             @default(0) @map("items_processed")
+  throughputPerMinute Decimal         @default(0) @map("throughput_per_minute") @db.Decimal(10, 4)
+  costUsd             Decimal         @default(0) @map("cost_usd") @db.Decimal(10, 6)
+  memoryPeakMb        Int             @default(0) @map("memory_peak_mb")
+  cpuAvgPercent       Decimal         @default(0) @map("cpu_avg_percent") @db.Decimal(5, 2)
+  recordedAt          DateTime        @default(now()) @map("recorded_at")
+  episodeId           Int?            @map("episode_id")
+  runId               String?         @map("run_id") @db.VarChar(255)
+  episode             PodcastEpisode? @relation(fields: [episodeId], references: [id])
+
+  @@index([stage])
+  @@index([pipelineType])
+  @@index([recordedAt])
+  @@index([success])
+  @@map("pipeline_performance_metrics")
+}
+
+model PipelineResourceUsage {
+  id                Int            @id @default(autoincrement())
+  episodeId         Int            @map("episode_id")
+  runId             String         @map("run_id") @db.VarChar(255)
+  timestamp         DateTime       @default(now())
+  memoryUsageMb     Int            @default(0) @map("memory_usage_mb")
+  cpuUsagePercent   Decimal        @default(0) @map("cpu_usage_percent") @db.Decimal(5, 2)
+  diskIoMbPerSec    Decimal        @default(0) @map("disk_io_mb_per_sec") @db.Decimal(10, 4)
+  networkIoMbPerSec Decimal        @default(0) @map("network_io_mb_per_sec") @db.Decimal(10, 4)
+  activeConnections Int            @default(0) @map("active_connections")
+  queueLength       Int            @default(0) @map("queue_length")
+  episode           PodcastEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId])
+  @@index([runId])
+  @@index([timestamp])
+  @@map("pipeline_resource_usage")
+}
+
+model PipelineRecoveryAction {
+  id                Int            @id @default(autoincrement())
+  episodeId         Int            @map("episode_id")
+  runId             String         @map("run_id") @db.VarChar(255)
+  stage             String         @db.VarChar(100)
+  errorType         String         @map("error_type") @db.VarChar(100)
+  actionType        String         @map("action_type") @db.VarChar(50)
+  actionDescription String?        @map("action_description")
+  automated         Boolean        @default(false)
+  success           Boolean?
+  executedAt        DateTime       @default(now()) @map("executed_at")
+  completedAt       DateTime?      @map("completed_at")
+  resultMessage     String?        @map("result_message")
+  episode           PodcastEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId])
+  @@index([runId])
+  @@index([stage])
+  @@index([actionType])
+  @@index([executedAt])
+  @@map("pipeline_recovery_actions")
+}
+
+model keyword_search_cache {
+  id               Int             @id @default(autoincrement())
+  keyword          String          @db.VarChar(255)
+  searched_at      DateTime        @default(now()) @db.Timestamp(6)
+  episode_id       Int?
+  tweet_count      Int             @default(0)
+  tweet_ids        String[]
+  search_params    Json?
+  api_calls_used   Int?            @default(1)
+  created_at       DateTime?       @default(now()) @db.Timestamp(6)
+  expires_at       DateTime        @default(dbgenerated("(CURRENT_TIMESTAMP + '4 days'::interval)")) @db.Timestamp(6)
+  podcast_episodes PodcastEpisode? @relation(fields: [episode_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([keyword, episode_id, expires_at])
+  @@index([episode_id], map: "idx_keyword_search_cache_episode")
+  @@index([expires_at], map: "idx_keyword_search_cache_expires_at")
+  @@index([keyword], map: "idx_keyword_search_cache_keyword")
+  @@index([keyword, expires_at(sort: Desc)], map: "idx_keyword_search_cache_lookup")
+  @@index([searched_at(sort: Desc)], map: "idx_keyword_search_cache_searched_at")
+}

@@ -1,0 +1,18 @@
+{
+  "episode_dir": "20250822-ep16",
+  "pipeline_type": "legacy",
+  "files": {
+    "transcript": "inputs/transcript.txt",
+    "overview": "inputs/podcast_overview.txt",
+    "video_url": "inputs/video_url.txt",
+    "summary": "outputs/summary.md",
+    "keywords": "outputs/keywords.json",
+    "fewshots": "outputs/fewshots.json",
+    "tweets": "outputs/tweets.json",
+    "classified": "outputs/classified.json",
+    "responses": "outputs/responses.json",
+    "published": "outputs/published.json",
+    "summary_hash": "cache/summary.hash",
+    "fewshots_hash": "cache/fewshots.hash"
+  }
+}

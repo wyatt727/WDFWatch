@@ -1,0 +1,170 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env
+.env*
+.env.local
+.env.production
+.env.development
+
+# API Keys and Secrets
+*.key
+*.pem
+*.cert
+*.crt
+*.p12
+*_key.json
+*-key.json
+secrets/
+credentials/
+api_keys.py
+config.ini
+config.json
+
+# Twitter/X API credentials
+BEARER_TOKEN
+ACCESS_TOKEN*
+API_KEY*
+CLIENT_SECRET*
+*_TOKEN*
+*_SECRET*
+
+# Database credentials
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+database.yml
+db.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Serena/AI cache
+.serena/
+*.pkl
+*.pickle
+*_cache.json
+*_cache.pkl
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Project specific
+artefacts/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Episodes and transcripts with sensitive data
+episodes/
+transcripts/
+claude-pipeline/episodes/
+claude-pipeline/transcripts/
+*.transcript
+*.transcript.txt
+transcript_*.txt
+summary.md
+keywords.json
+tweets.json
+classified.json
+responses.json
+published.json
+fewshots.json
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Next.js build output
+.next/
+out/
+build/
+dist/
+*.next
+web/.next/
+web/out/
+web/build/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Miscellaneous
+.DS_Store
+Thumbs.db
+
+# Web environment files
+web/.env
+web/.env.*
+web/.env.local
+web/.env.production
+
+# Migration packages with sensitive data
+*_migration_*.tar.gz
+migration_package/
+wdfwatch_postgresql_*.sql
+wdfwatch_postgresql_*.sql.gz
+
+# Backup files that might contain keys
+*.backup
+*.bak
+*.old
+*.orig
+*~
+
+# Docker override files that might have secrets
+docker-compose.override.yml
+docker-compose.prod.yml
+
+# Any file with 'key' or 'secret' in the name
+*secret*
+*key*
+*password*
+*credential*
+
+# Claude pipeline cache with potential API data
+claude-pipeline/cache/
+response_cache.json
+
+# Temporary export files
+EXPORT_*.sh
+FIX_*.sh
+MIGRATION_*.md   

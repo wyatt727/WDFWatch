@@ -1,0 +1,7 @@
+MODE: CLASSIFY
+
+Using the Reasoning Mode format, classify these tweets:
+
+@/Users/pentester/Tools/WDFWatch/claude-pipeline/episodes/episode_14/tweets_clean.json
+
+Output ONLY the scores and reasons in the exact format specified.

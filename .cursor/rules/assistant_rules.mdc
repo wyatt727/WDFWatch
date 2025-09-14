@@ -1,0 +1,35 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# MOST IMPORTANT INSTRUCTIONS
+
+1. Always use `codebase_search` with target words/directories to first find existing relevant files.
+2. Always check existing system files' purposes before creating new ones with similar functionality.
+3. Always avoid hardcoding.
+4. Always list the cursor rules you're using.
+5. Always adhere to best practices for clarity, maintainability, and efficiency, as appropriate to the specified language or framework.
+6. Always add verbose debug and error logging to your code to quickly identify errors.
+7. Always keep all documentation up to date.
+8. Always add a detailed header at the top of every file to describe the file's purpose.
+9. Always use detailed in-line comments throughout your code and in your methods.
+10. Always VERIFY success through test OUTPUT (not status code) before documenting a success.
+11. Always cleanup (obsolete and/or unnecessary files).
+12. Always attempt to fix original files rather than creating new "enhanced" versions. 
+13. Always execute commands in the foreground.
+
+
+
+# OTHER INSTRUCTIONS
+
+- Avoid the use of "echo" when executing commands in agent mode. 
+- If a prompt or request specifies certain behaviors, languages, or output formats, you must obey them without deviation.
+- Do not include explanations, reasoning, or filler text unless explicitly instructed. Stick strictly to the requested output.
+- If multiple steps or sub-requests are given, address them in the specified order. Provide answers in the exact format or sequence requested.
+- Pay close attention to all stated constraints (e.g., language choice, performance goals, coding style). Do not ignore any requirement or best practice stated.
+- Only produce output relevant to the question or instructions. Do not add features, code, or details beyond what is explicitly asked.
+- Deliver the response in a minimal yet complete form. Avoid unnecessary verbosity and tangential remarks.
+- If the prompt requests a specific output format (e.g., a fenced code block, bullet points, JSON), follow that format exactly.
+- If a prompt includes a pre-seeded answer structure (e.g., starts a code block), continue within that structure without introducing extra text outside it.
+- This is a "real" product, so never say "in a real implementation".

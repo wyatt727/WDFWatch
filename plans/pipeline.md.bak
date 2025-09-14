@@ -1,0 +1,11 @@
+### Pipeline Steps
+
+0. Update transcript to automatically start/restart the pipeline below
+1. Use ChatGPT o3 API to generate a comprehensive summary of transcript and Keywords.
+2. Use X API to gather tweets based on the o3 generated keywords.
+3. Use gemini-cli (local/free) to generate "few shot" examples of relevant/unrelevant tweets.
+4. Use gemma-3n (local/free) with the "few shot" examples + summary to determine if a tweet is relevant
+5. Send relevant tweets to deepseek-r1 (local/free) which is trained on summary
+6. Optionally send to ChatGPT 4.1-nano API for tweet polish + condensing to correct character count
+7. Tweets to queue for manual approval/editing.
+8. Approved tweets are published as a comment using X API

@@ -1,0 +1,45 @@
+{
+  "episode_id": "5",
+  "stages": {
+    "summarization": {
+      "episode_id": "5",
+      "episode_dir": "episodes/episode_5",
+      "summary": "",
+      "keywords": [],
+      "video_url": "https://youtube.com/claude-test-5",
+      "context_file": "episodes/episode_5/summary.md",
+      "context_created": true
+    },
+    "scraping": {
+      "tweet_count": 10,
+      "skipped": false
+    },
+    "classification": {
+      "total_tweets": 10,
+      "relevant": 0,
+      "skip": 10,
+      "relevant_percentage": 0.0
+    },
+    "response_generation": {
+      "responses_generated": 0,
+      "skipped": false
+    },
+    "moderation": {
+      "total": 0,
+      "approved": 0,
+      "rejected": 0,
+      "approval_rate": 0,
+      "skipped": true
+    }
+  },
+  "stats": {
+    "total_time_seconds": 360.17,
+    "total_time_minutes": 6.0,
+    "tweets_processed": 10,
+    "responses_generated": 0,
+    "responses_approved": 0,
+    "approval_rate": 0
+  },
+  "start_time": "2025-08-14T13:54:18.549297",
+  "episode_dir": "episodes/episode_5"
+}

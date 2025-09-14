@@ -1,0 +1,6 @@
+https://ai.google.dev/gemma/docs/gemma-3n
+https://ai.google.dev/gemma/docs/gemma-3n/model_card
+https://huggingface.co/google/gemma-3n-E4B-it
+https://huggingface.co/unsloth/gemma-3n-E4B-it-GGUF
+https://docs.unsloth.ai/basics/gemma-3n-how-to-run-and-fine-tune
+https://github.com/unslothai/unsloth/blob/main/unsloth/chat_templates.py

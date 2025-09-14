@@ -1,0 +1,17 @@
+{
+  "episode_id": "5",
+  "created_at": "2025-08-14T13:54:18.550850",
+  "transcript_length": 58679,
+  "video_url": "https://youtube.com/claude-test-5",
+  "status": "summarized",
+  "stages_completed": [
+    "summarized"
+  ],
+  "updated_at": "2025-08-14T13:57:34.603383",
+  "summarized_data": {
+    "guest": {},
+    "themes_count": 0,
+    "quotes_count": 0,
+    "keywords_count": 0
+  }
+}

@@ -1,0 +1,1007 @@
+
+> wdfwatch-web@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+
+ ✓ Ready in 2.5s
+ ○ Compiling / ...
+ ✓ Compiled / in 3.7s (568 modules)
+ ✓ Compiled in 429ms (291 modules)
+ ○ Compiling /inbox ...
+ ✓ Compiled /inbox in 3.6s (905 modules)
+ ✓ Compiled /middleware in 215ms (64 modules)
+ ✓ Compiled /api/events in 240ms (936 modules)
+SSE client connected: y5uspf
+SSE client connected: ctlh1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: y5uspf
+SSE client connected: 5euri
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: 5euri
+SSE client connected: qwo5i
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ✓ Compiled /review in 303ms (970 modules)
+prisma:error 
+Invalid `prisma.tweet.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: ctlh1
+ ✓ Compiled /api/drafts in 167ms (503 modules)
+SSE client connected: 6900a9
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ○ Compiling /episodes ...
+ ✓ Compiled /episodes in 838ms (1096 modules)
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: qwo5i
+SSE client disconnected: 6900a9
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client connected: 1ivbbb
+SSE client connected: mzy29x
+ ○ Compiling /analytics ...
+ ✓ Compiled /analytics in 3s (2229 modules)
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: 1ivbbb
+ ✓ Compiled /api/analytics in 221ms (1208 modules)
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.groupBy()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.pipelineRun.groupBy()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.quotaUsage.findFirst()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.pipelineRun.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.quotaUsage.findFirst()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: mzy29x
+SSE client connected: virziu
+prisma:error 
+Invalid `prisma.tweet.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.pipelineRun.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.quotaUsage.findFirst()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.groupBy()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.quotaUsage.findFirst()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.pipelineRun.groupBy()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: virziu
+ ○ Compiling /audit ...
+ ✓ Compiled /audit in 645ms (2273 modules)
+SSE client connected: 5dfwkb
+prisma:error 
+Invalid `prisma.tweet.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.tweet.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.pipelineRun.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.quotaUsage.findFirst()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.draftReply.groupBy()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: 5dfwkb
+prisma:error 
+Invalid `prisma.pipelineRun.groupBy()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.quotaUsage.findFirst()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client connected: 4uriuo
+ ✓ Compiled /api/audit-logs in 178ms (1221 modules)
+SSE client connected: 00q24e
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+SSE client disconnected: 00q24e
+SSE client connected: lv3j9k
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ✓ Compiled /settings in 441ms (2286 modules)
+prisma:error 
+Invalid `prisma.auditLog.count()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ✓ Compiled /settings/llm-models in 444ms (2303 modules)
+ ✓ Compiled /api/settings/llm-models in 354ms (1255 modules)
+prisma:error 
+Invalid `prisma.setting.findUnique()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.setting.findUnique()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ○ Compiling /settings/keywords ...
+ ✓ Compiled /settings/keywords in 510ms (2352 modules)
+ ✓ Compiled /api/keywords in 191ms (1276 modules)
+prisma:error 
+Invalid `prisma.keyword.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.keyword.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.keyword.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.keyword.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.keyword.findFirst()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ✓ Compiled /api/internal/audit in 277ms (1264 modules)
+prisma:error 
+Invalid `prisma.auditLog.create()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ○ Compiling /settings/scraping ...
+ ✓ Compiled /settings/scraping in 670ms (2360 modules)
+ ✓ Compiled /api/episodes in 205ms (1276 modules)
+ ✓ Compiled (1280 modules)
+prisma:error 
+Invalid `prisma.podcastEpisode.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.setting.findUnique()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.podcastEpisode.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.setting.findUnique()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.podcastEpisode.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.setting.findUnique()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.podcastEpisode.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.setting.findUnique()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.keyword.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.keyword.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.keyword.findMany()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+ ✓ Compiled /api/scraping/trigger in 223ms (579 modules)
+prisma:error 
+Invalid `prisma.auditLog.create()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+prisma:error 
+Invalid `prisma.setting.findUnique()` invocation:
+
+
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:11
+   | 
+10 |   provider   = "postgresql"
+11 |   url        = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1

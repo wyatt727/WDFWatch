@@ -1,0 +1,47 @@
+[
+  {
+    "id": "tlbhj7sratbo0vo12k01",
+    "text": "It's not just Texas. Movements for independence are popping up in California, New Hampshire, and other states too. This is a real trend. #NationalDivorce",
+    "user": "@user8125",
+    "created_at": "2025-06-28T20:23:54.470324+00:00",
+    "relevance_score": 0.95,
+    "classification": "RELEVANT",
+    "classification_reason": "Directly discusses state independence movements including Texas, mentions national divorce - core WDF theme"
+  },
+  {
+    "id": "tt7m00lxztnyeh3hbxfd",
+    "text": "The new Star Wars movie was a huge disappointment. They're ruining the franchise. #StarWars",
+    "user": "@user4604",
+    "created_at": "2025-06-28T20:23:54.470346+00:00",
+    "relevance_score": 0.0,
+    "classification": "SKIP",
+    "classification_reason": "Entertainment content about Star Wars, completely unrelated to podcast themes"
+  },
+  {
+    "id": "t6f2z1sxr98hkhl0f35v",
+    "text": "The federal government is trillions in debt. Why should Texas be obligated to take on any of it if they vote to leave?",
+    "user": "@user1057",
+    "created_at": "2025-06-28T20:23:54.470364+00:00",
+    "relevance_score": 0.92,
+    "classification": "RELEVANT",
+    "classification_reason": "Specifically addresses Texas independence and federal debt obligations, directly relevant to episode topic"
+  },
+  {
+    "id": "taox5xugihlfqph24wlw",
+    "text": "I support #liberty and freedom, that's why I'm running for city council. We need more transparency in local government.",
+    "user": "@user2471",
+    "created_at": "2025-06-28T20:23:54.470380+00:00",
+    "relevance_score": 0.55,
+    "classification": "SKIP",
+    "classification_reason": "General liberty/freedom themes align with podcast values but focuses on local politics, not federalism or state sovereignty"
+  },
+  {
+    "id": "tvaqgd2nashdfu76r754",
+    "text": "The WDF podcast is one of the few places having a serious conversation about the future of the American union. #WarDivorceFederalism",
+    "user": "@user4241",
+    "created_at": "2025-06-28T20:23:54.470396+00:00",
+    "relevance_score": 1.0,
+    "classification": "RELEVANT",
+    "classification_reason": "Explicitly mentions WDF podcast and its focus on the future of American union, perfectly relevant"
+  }
+]

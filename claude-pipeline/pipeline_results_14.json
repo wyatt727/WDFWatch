@@ -1,0 +1,11 @@
+{
+  "stage": "respond",
+  "episode_id": "14",
+  "success": true,
+  "start_time": "2025-08-14T10:31:01.014489",
+  "stats": {
+    "total_time_seconds": 52.54,
+    "total_time_minutes": 0.88
+  },
+  "responses_generated": 47
+}

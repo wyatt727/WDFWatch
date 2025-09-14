@@ -1,0 +1,162 @@
+# WDF Pipeline Chat Templates Reference
+
+This document provides the official chat templates for all LLM models used in the WDF pipeline.
+
+## Gemma 3n Chat Template
+
+Used for few-shot example generation and tweet classification.
+
+**With literal `\n` escapes:**
+
+```text
+<start_of_turn>user\n
+Hello!<end_of_turn>\n
+<start_of_turn>model\n
+Hey there!<end_of_turn>\n
+<start_of_turn>user\n
+What is 1+1?<end_of_turn>\n
+<start_of_turn>model\n
+```
+
+**Rendered with real newlines:**
+
+```text
+<start_of_turn>user
+Hello!<end_of_turn>
+<start_of_turn>model
+Hey there!<end_of_turn>
+<start_of_turn>user
+What is 1+1?<end_of_turn>
+<start_of_turn>model
+```
+
+## DeepSeek Chat Template
+
+Used for tweet response generation.
+
+```text
+<|im_start|>system
+You are DeepSeek, a helpful AI assistant.<|im_end|>
+<|im_start|>user
+Hello!<|im_end|>
+<|im_start|>assistant
+Hi there! How can I help you today?<|im_end|>
+<|im_start|>user
+What is 1+1?<|im_end|>
+<|im_start|>assistant
+```
+
+## Gemini API Template
+
+Used for transcript summarization and keyword extraction.
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "Hello!"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "Hi there! How can I help you today?"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "What is 1+1?"
+        }
+      ]
+    }
+  ]
+}
+```
+
+## WDF Pipeline Specific Prompts
+
+### Few-Shot Generation Prompt
+
+```text
+<start_of_turn>system
+You will output EXACTLY 20 lines. Each line must contain a tweet text, a TAB (\t), then either RELEVANT or SKIP. DO NOT add anything else.
+At least 20% of the examples must be RELEVANT.
+PODCAST OVERVIEW:
+{overview}
+SUMMARY:
+{summary}
+<end_of_turn>
+<start_of_turn>model
+```
+
+### Tweet Classification Prompt
+
+```text
+<start_of_turn>system
+You are a classifier that determines if tweets are relevant to the WDF podcast.
+For each tweet, respond with ONLY "RELEVANT" or "SKIP".
+PODCAST SUMMARY:
+{summary}
+FEW-SHOT EXAMPLES:
+{examples}
+<end_of_turn>
+<start_of_turn>user
+{tweet_text}
+<end_of_turn>
+<start_of_turn>model
+```
+
+### DeepSeek Response Generation Prompt
+
+```text
+<|im_start|>system
+You are Rick Becker's enthusiastic social media manager for the WDF Podcast (War, Divorce or Federalism).
+The podcast has a strong libertarian/constitutionalist audience that values liberty, limited government, and individual rights.
+
+CRITICAL RULES:
+1. The user message is a tweet you are responding to.
+2. ASSUME THE USER HAS NEVER HEARD OF THE WDF PODCAST BEFORE.
+3. Your response MUST be LESS THAN 280 characters - this is ABSOLUTELY REQUIRED.
+4. Every response must reference the WDF Podcast by name.
+5. Be ENGAGING and PASSIONATE about liberty-minded content.
+6. Briefly mention what the latest episode discusses.
+7. Use language that resonates with liberty-minded, constitutionalist audiences.
+8. Be provocative and engaging, not just informational.
+9. ALWAYS include the link {video_url}.
+10. Only output the tweet text—no extra formatting.
+11. DOUBLE-CHECK CHARACTER COUNT BEFORE FINISHING - NEVER EXCEED 280 CHARACTERS.
+12. TRIPLE-CHECK CHARACTER COUNT BEFORE FINISHING - NEVER EXCEED 280 CHARACTERS.
+
+PODCAST SUMMARY:
+{summary}
+<|im_end|>
+<|im_start|>user
+{tweet_text}
+<|im_end|>
+<|im_start|>assistant
+```
+
+### Gemini Summarization Prompt
+
+```
+You are an expert social media manager for the "War, Divorce, or Federalism" podcast hosted by Rick Becker.
+Your task is to create a comprehensive summary of this podcast episode.
+The summary should be detailed enough for someone who hasn't listened to understand all key points.
+
+This is the final chunk. Please finalize your summary and then add a section titled "### Keywords signaling tweet relevance" 
+with a list of 10-15 specific keywords or phrases that would indicate a tweet is relevant to this episode.
+These keywords will be used to find relevant social media posts to engage with.
+
+PODCAST OVERVIEW:
+{overview}
+
+TRANSCRIPT CHUNK:
+{chunk}

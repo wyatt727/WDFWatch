@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: wdf-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wdf-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: wdf-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./web/prisma/schema-simple.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    environment:
+      - POSTGRES_USER=wdfwatch
+      - POSTGRES_PASSWORD=wdfwatch_dev_2025
+      - POSTGRES_DB=wdfwatch
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wdfwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wdf-pipeline
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./transcripts:/app/transcripts
+      - ./artefacts:/app/artefacts
+      - ./logs:/app/logs
+    environment:
+      - WDF_OLLAMA_HOST=http://ollama:11434
+      - WDF_REDIS_URL=redis://redis:6379/0
+      - WDF_MOCK_MODE=true
+      - WDF_DEBUG=false
+      - WDF_RANDOM_SEED=42
+      - DATABASE_URL=postgresql://wdfwatch:wdfwatch_dev_2025@postgres:5432/wdfwatch
+      - WDF_WEB_MODE=true
+      - WDF_DUAL_MODE=true
+      # Uncomment and set these in production
+      # - TWITTER_API_KEY=your_api_key
+      # - TWITTER_API_SECRET=your_api_secret
+      # - TWITTER_TOKEN=your_access_token
+      # - TWITTER_TOKEN_SECRET=your_access_token_secret
+      # LLM model configuration
+      - WDF_LLM_MODELS__GEMINI=gemini-2.5-pro
+      - WDF_LLM_MODELS__GEMMA=gemma3n:e4b
+      - WDF_LLM_MODELS__DEEPSEEK=deepseek-r1:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: wdf-web
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://wdfwatch:wdfwatch_dev_2025@postgres:5432/wdfwatch
+      - REDIS_URL=redis://redis:6379/0
+      - NEXTAUTH_SECRET=dev-secret-change-in-production
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_ENABLE_REALTIME=true
+      - NEXT_PUBLIC_ENABLE_ANALYTICS=true
+      - PYTHON_API_URL=http://pipeline:8000
+      - WDF_DUAL_MODE=true
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  ollama-data:
+  redis-data:
+  postgres-data:
