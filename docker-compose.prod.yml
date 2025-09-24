@@ -1,0 +1,278 @@
+# Production Docker Compose configuration for WDFWatch
+# Part of Phase 4 Production Infrastructure Setup
+# 
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d
+#
+# Connected files:
+# - docker-compose.yml - Development configuration
+# - web/Dockerfile - Web application image
+# - Dockerfile - Python pipeline image
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database with pgvector
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: wdfwatch-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wdfwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
+      POSTGRES_DB: ${POSTGRES_DB:-wdfwatch_prod}
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./web/prisma/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wdfwatch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: wdfwatch-redis-prod
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data_prod:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # Next.js Web Application
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+    container_name: wdfwatch-web-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wdfwatch}:${POSTGRES_PASSWORD:?error}@postgres:5432/${POSTGRES_DB:-wdfwatch_prod}?schema=public
+      REDIS_URL: redis://redis:6379/0
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://wdfwatch.example.com}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?error}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+  # Python Pipeline Service
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: wdfwatch-pipeline-prod
+    restart: always
+    environment:
+      WDF_WEB_MODE: "true"
+      WDF_MOCK_MODE: "false"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wdfwatch}:${POSTGRES_PASSWORD:?error}@postgres:5432/${POSTGRES_DB:-wdfwatch_prod}?schema=public
+      WDF_REDIS_URL: redis://redis:6379/0
+      WDF_OLLAMA_HOST: ${WDF_OLLAMA_HOST:-http://ollama:11434}
+      WDF_LOG_LEVEL: INFO
+      TWITTER_API_KEY: ${TWITTER_API_KEY:?error}
+      TWITTER_API_SECRET: ${TWITTER_API_SECRET:?error}
+      TWITTER_ACCESS_TOKEN: ${TWITTER_ACCESS_TOKEN:?error}
+      TWITTER_ACCESS_TOKEN_SECRET: ${TWITTER_ACCESS_TOKEN_SECRET:?error}
+    volumes:
+      - ./transcripts:/app/transcripts
+      - ./artefacts:/app/artefacts
+      - pipeline_logs_prod:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Ollama for Local LLM Models
+  ollama:
+    image: ollama/ollama:latest
+    container_name: wdfwatch-ollama-prod
+    restart: always
+    volumes:
+      - ollama_data_prod:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    environment:
+      OLLAMA_KEEP_ALIVE: "30m"
+      OLLAMA_NUM_PARALLEL: "4"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: wdfwatch-nginx-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_cache_prod:/var/cache/nginx
+    depends_on:
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: wdfwatch-prometheus-prod
+    restart: always
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data_prod:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: wdfwatch-grafana-prod
+    restart: always
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?error}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-clock-panel,grafana-simple-json-datasource"
+    volumes:
+      - grafana_data_prod:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # Backup Service
+  backup:
+    image: postgres:16-alpine
+    container_name: wdfwatch-backup-prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wdfwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
+      POSTGRES_DB: ${POSTGRES_DB:-wdfwatch_prod}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
+    volumes:
+      - ./scripts/backup.sh:/backup.sh:ro
+      - backups_prod:/backups
+    command: >
+      sh -c "
+        apk add --no-cache dcron &&
+        echo '${BACKUP_SCHEDULE} /backup.sh' | crontab - &&
+        crond -f -l 2
+      "
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  postgres_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local
+  ollama_data_prod:
+    driver: local
+  pipeline_logs_prod:
+    driver: local
+  nginx_cache_prod:
+    driver: local
+  prometheus_data_prod:
+    driver: local
+  grafana_data_prod:
+    driver: local
+  backups_prod:
+    driver: local
+
+networks:
+  default:
+    name: wdfwatch-prod
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

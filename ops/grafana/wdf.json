@@ -1,0 +1,357 @@
+{
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "target": { "limit": 100, "matchAny": false, "tags": [], "type": "dashboard" },
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": 1,
+    "links": [],
+    "liveNow": false,
+    "refresh": "5m",
+    "schemaVersion": 37,
+    "style": "dark",
+    "tags": ["wdf", "pipeline"],
+    "templating": {
+      "list": [
+        {
+          "name": "env",
+          "label": "Environment",
+          "type": "custom",
+          "options": [
+            { "text": "dev", "value": "dev" },
+            { "text": "staging", "value": "staging" },
+            { "text": "prod", "value": "prod" }
+          ],
+          "current": { "text": "prod", "value": "prod" },
+          "hide": 0,
+          "refresh": 1
+        },
+        {
+          "name": "model",
+          "label": "LLM Model",
+          "type": "custom",
+          "options": [
+            { "text": "gemini-pro", "value": "gemini-pro" },
+            { "text": "gemma3n:e4b", "value": "gemma3n:e4b" },
+            { "text": "deepseek-r1:latest", "value": "deepseek-r1:latest" }
+          ],
+          "current": { "text": "gemini-pro", "value": "gemini-pro" },
+          "hide": 0,
+          "refresh": 1
+        },
+        {
+          "name": "time_range",
+          "label": "Time Range",
+          "type": "custom",
+          "options": [
+            { "text": "5m",  "value": "5m"   },
+            { "text": "1h",  "value": "1h"   },
+            { "text": "6h",  "value": "6h"   },
+            { "text": "24h", "value": "24h"  }
+          ],
+          "current": { "text": "1h", "value": "1h" },
+          "hide": 0,
+          "refresh": 1
+        }
+      ]
+    },
+    "time": { "from": "now-${time_range}", "to": "now" },
+    "timepicker": {},
+    "timezone": "",
+    "title": "WDF Pipeline Dashboard (Enhanced)",
+    "uid": "wdf-pipeline-enhanced",
+    "version": 2,
+    "panels": [
+      {
+        "id": 1,
+        "type": "stat",
+        "title": "Total Tweets Classified",
+        "gridPos": { "x": 0,  "y": 0, "w": 3, "h": 3 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "targets": [
+          {
+            "expr": "sum(increase(tweets_classified_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": { "values": false, "calcs": ["sum"], "fields": "" },
+          "orientation": "horizontal",
+          "textMode": "value",
+          "colorMode": "value",
+          "sparkline": { "show": true }
+        }
+      },
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "Relevance Rate (%)",
+        "gridPos": { "x": 3,  "y": 0, "w": 3, "h": 3 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "targets": [
+          {
+            "expr": "100 * sum(increase(tweets_relevant_total{env=\"$env\",model=\"$model\"}[${time_range}])) \n  / sum(increase(tweets_classified_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": { "calcs": ["last"], "fields": "" },
+          "colorMode": "value",
+          "unit": "percent",
+          "sparkline": { "show": true }
+        }
+      },
+      {
+        "id": 3,
+        "type": "stat",
+        "title": "Avg E2E Latency (s)",
+        "gridPos": { "x": 6,  "y": 0, "w": 3, "h": 3 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "targets": [
+          {
+            "expr": "rate(processing_latency_seconds_sum{env=\"$env\",model=\"$model\"}[${time_range}]) \n  / rate(processing_latency_seconds_count{env=\"$env\",model=\"$model\"}[${time_range}])",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": { "calcs": ["last"], "fields": "" },
+          "unit": "s",
+          "sparkline": { "show": true }
+        }
+      },
+      {
+        "id": 4,
+        "type": "stat",
+        "title": "Error Rate (%)",
+        "gridPos": { "x": 9,  "y": 0, "w": 3, "h": 3 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "targets": [
+          {
+            "expr": "100 * sum(increase(deepseek_errors_total{env=\"$env\",model=\"$model\"}[${time_range}])) \n  / sum(increase(responses_generated_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": { "calcs": ["last"], "fields": "" },
+          "unit": "percent",
+          "sparkline": { "show": true }
+        }
+      },
+  
+      {
+        "id": 5,
+        "type": "row",
+        "title": "Ingestion & Classification",
+        "gridPos": { "x": 0, "y": 3, "w": 24, "h": 1 },
+        "collapsed": true
+      },
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "Tweet Processing",
+        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "fieldConfig": { "defaults": {}, "overrides": [] },
+        "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+        "targets": [
+          {
+            "expr": "sum(increase(tweets_classified_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "A",
+            "legendFormat": "Classified"
+          },
+          {
+            "expr": "sum(increase(tweets_relevant_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "B",
+            "legendFormat": "Relevant"
+          },
+          {
+            "expr": "sum(increase(tweets_skipped_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "C",
+            "legendFormat": "Skipped"
+          }
+        ],
+        "alert": {
+          "name": "Low Throughput Alert",
+          "conditions": [
+            {
+              "type": "query",
+              "query": { "params": ["A", "5m", "now"] },
+              "reducer": { "type": "avg", "params": [] },
+              "evaluator": { "type": "lt", "params": [10] },
+              "operator": { "type": "and" }
+            }
+          ],
+          "for": "2m",
+          "frequency": "1m",
+          "handler": 1
+        }
+      },
+  
+      {
+        "id": 7,
+        "type": "row",
+        "title": "Response Generation",
+        "gridPos": { "x": 0, "y": 12, "w": 24, "h": 1 },
+        "collapsed": true
+      },
+      {
+        "id": 8,
+        "type": "timeseries",
+        "title": "DeepSeek Responses",
+        "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "fieldConfig": { "defaults": {}, "overrides": [] },
+        "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+        "targets": [
+          {
+            "expr": "sum(increase(responses_generated_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "A",
+            "legendFormat": "Generated"
+          },
+          {
+            "expr": "sum(increase(responses_oversized_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "B",
+            "legendFormat": "Oversized"
+          },
+          {
+            "expr": "sum(increase(deepseek_errors_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "C",
+            "legendFormat": "Errors"
+          }
+        ]
+      },
+  
+      {
+        "id": 9,
+        "type": "row",
+        "title": "Moderation & Publishing",
+        "gridPos": { "x": 0, "y": 21, "w": 24, "h": 1 },
+        "collapsed": true
+      },
+      {
+        "id": 10,
+        "type": "timeseries",
+        "title": "Moderation Actions",
+        "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "fieldConfig": { "defaults": {}, "overrides": [] },
+        "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+        "targets": [
+          {
+            "expr": "sum(increase(tweets_approved_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "A",
+            "legendFormat": "Approved"
+          },
+          {
+            "expr": "sum(increase(tweets_edited_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "B",
+            "legendFormat": "Edited"
+          },
+          {
+            "expr": "sum(increase(tweets_rejected_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "C",
+            "legendFormat": "Rejected"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "type": "timeseries",
+        "title": "Published Tweets",
+        "gridPos": { "x": 12, "y": 22, "w": 12, "h": 4 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "targets": [
+          {
+            "expr": "sum(increase(tweets_published_total{env=\"$env\",model=\"$model\"}[${time_range}]))",
+            "refId": "A",
+            "legendFormat": "Published"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "type": "gauge",
+        "title": "Moderation Queue Depth",
+        "gridPos": { "x": 12, "y": 26, "w": 12, "h": 4 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "targets": [
+          {
+            "expr": "redis_queue_length{queue=\"moderation\",env=\"$env\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": null, "color": "green" },
+                { "value": 50,   "color": "orange" },
+                { "value": 100,  "color": "red" }
+              ]
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "id": 13,
+        "type": "table",
+        "title": "Recent Pipeline Errors",
+        "gridPos": { "x": 0, "y": 30, "w": 24, "h": 6 },
+        "datasource": { "uid": "loki", "type": "loki" },
+        "targets": [
+          {
+            "expr": "{job=\"wdf_pipeline\"} |= \"error\"",
+            "refId": "A"
+          }
+        ],
+        "options": { "showHeader": true }
+      },
+      {
+        "id": 14,
+        "type": "timeseries",
+        "title": "Processing Latency (p95)",
+        "gridPos": { "x": 0, "y": 36, "w": 24, "h": 8 },
+        "datasource": { "uid": "prometheus", "type": "prometheus" },
+        "fieldConfig": { "defaults": {}, "overrides": [] },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(summary_latency_seconds_bucket{env=\"$env\",model=\"$model\"}[${time_range}])) by (le))",
+            "refId": "A",
+            "legendFormat": "Summary (p95)"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(fewshot_latency_seconds_bucket{env=\"$env\",model=\"$model\"}[${time_range}])) by (le))",
+            "refId": "B",
+            "legendFormat": "Few-shot (p95)"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(classify_latency_seconds_bucket{env=\"$env\",model=\"$model\"}[${time_range}])) by (le))",
+            "refId": "C",
+            "legendFormat": "Classify (p95)"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(deepseek_latency_seconds_bucket{env=\"$env\",model=\"$model\"}[${time_range}])) by (le))",
+            "refId": "D",
+            "legendFormat": "DeepSeek (p95)"
+          }
+        ]
+      }
+    ]
+  }
+  

@@ -1,0 +1,27 @@
+name: wdf-pipeline
+description: WDF Podcast Social-Engagement Pipeline
+version: 1.0.0
+entrypoint: src/wdf/flow.py:wdf_pipeline_flow
+parameters: {}
+work_pool:
+  name: wdf-pool
+  job_variables:
+    image: ghcr.io/yourusername/wdf-pipeline:latest
+    env:
+      WDF_OLLAMA_HOST: http://ollama:11434
+      WDF_REDIS_URL: redis://redis:6379/0
+      WDF_MOCK_MODE: "false"
+      WDF_PREFECT_WORKSPACE: wdf-prod
+    volumes:
+      - /path/to/transcripts:/app/transcripts
+      - /path/to/artefacts:/app/artefacts
+      - /path/to/logs:/app/logs
+schedule:
+  cron: "*/15 * * * *"  # Every 15 minutes
+  timezone: UTC
+  active: false  # Set to true to activate the schedule
+is_schedule_active: false
+tags:
+  - wdf
+  - podcast
+  - social-media 

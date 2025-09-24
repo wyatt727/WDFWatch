@@ -631,114 +631,92 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
                 target_tweets=count
             )
             
-            # Import deduplication service for smart fetching
+            # Use Smart Tweet Fetcher for proper pagination and deduplication
             try:
-                from ..tweet_deduplication import TweetDeduplicationService, get_fresh_tweet_count_needed
+                from ..tweet_deduplication import TweetDeduplicationService
+                from ..smart_tweet_fetcher import SmartTweetFetcher
+
+                # Initialize deduplication service
                 dedup_service = TweetDeduplicationService()
-                use_dedup = dedup_service.web_mode
-            except (ImportError, Exception) as e:
-                logger.info(f"Deduplication service not available: {e}")
-                dedup_service = None
-                use_dedup = False
 
-            # Smart fetching with deduplication to get EXACTLY the requested count of FRESH tweets
-            all_fetched_tweets = []
-            tweet_dicts = []  # This will hold only FRESH tweets
-            duplicate_count_total = 0
-            api_calls_made = 0
-            fetch_batch_size = count  # Start with requested count
+                # Initialize smart fetcher with API and dedup service
+                smart_fetcher = SmartTweetFetcher(twitter_v2, dedup_service)
 
-            logger.info(
-                "Starting smart tweet fetching with deduplication",
-                target_fresh_tweets=count,
-                deduplication_enabled=use_dedup
-            )
+                logger.info(
+                    "Using SmartTweetFetcher with pagination and deduplication",
+                    target_count=count,
+                    keyword_count=len(keywords_to_search),
+                    days_back=days_back
+                )
 
-            # Keep fetching until we have enough FRESH tweets
-            max_api_calls = 5  # Safety limit to prevent infinite loops
-            while len(tweet_dicts) < count and api_calls_made < max_api_calls:
+                # SmartTweetFetcher uses two strategies based on keyword count:
+                # 1. DEEP PAGINATION (≤2 keywords):
+                #    - Fetches up to 100 tweets per keyword per API call
+                #    - Uses pagination tokens to get more tweets from same keyword
+                #    - Continues until target count of FRESH tweets is reached
+                #    - Best for focused searches with specific keywords
+                #
+                # 2. SHALLOW SEARCH (>2 keywords):
+                #    - Fetches smaller batches spread across many keywords
+                #    - Only one pass per keyword (no deep pagination)
+                #    - Stops when target is reached or all keywords searched once
+                #    - Prevents excessive API calls when many keywords present
+                #    - Example: 30 keywords would be capped instead of 30*100=3000 tweets
+
+                # Fetch exactly the requested number of FRESH tweets
                 with SCRAPE_LATENCY.time():
-                    # Fetch batch of tweets
-                    batch_results = twitter_v2.search_tweets_optimized(
+                    tweet_dicts, fetch_stats = smart_fetcher.fetch_fresh_tweets(
                         keywords=keywords_to_search,
-                        max_tweets=fetch_batch_size,
+                        target_count=count,
+                        episode_id=episode_id,
+                        days_back=days_back,
+                        max_api_calls=10  # Safety limit
+                    )
+
+                # Log comprehensive statistics
+                logger.info(
+                    "🎯 Smart fetching complete",
+                    extra={
+                        'requested': count,
+                        'delivered': len(tweet_dicts),
+                        'total_fetched': fetch_stats['total_fetched'],
+                        'duplicates_filtered': fetch_stats['duplicates_filtered'],
+                        'fresh_tweets': fetch_stats['fresh_tweets'],
+                        'api_calls': fetch_stats['api_calls'],
+                        'keywords_searched': len(fetch_stats['keywords_searched']),
+                        'keywords_exhausted': len(fetch_stats['keywords_exhausted']),
+                        'efficiency': f"{(fetch_stats['fresh_tweets']/fetch_stats['total_fetched']*100):.1f}%" if fetch_stats['total_fetched'] > 0 else "N/A"
+                    }
+                )
+
+                # Clean up
+                if dedup_service:
+                    dedup_service.close()
+
+            except ImportError as e:
+                logger.warning(
+                    f"Smart fetching not available, falling back to standard search: {e}"
+                )
+                # Fall back to standard search without smart deduplication
+                with SCRAPE_LATENCY.time():
+                    tweet_dicts = twitter_v2.search_tweets_optimized(
+                        keywords=keywords_to_search,
+                        max_tweets=count,
                         min_relevance=0.5,
                         days_back=days_back
                     )
+                logger.info(f"Standard search returned {len(tweet_dicts)} tweets")
 
-                api_calls_made += 1
-
-                if not batch_results:
-                    logger.info("No more tweets available from API")
-                    break
-
-                all_fetched_tweets.extend(batch_results)
-
-                # Check for duplicates if deduplication is enabled
-                if use_dedup and dedup_service:
-                    fresh_batch, duplicate_batch = dedup_service.filter_fresh_tweets(
-                        batch_results,
-                        episode_id
+            except Exception as e:
+                logger.error(f"Smart fetching failed: {e}")
+                # Fall back to standard search
+                with SCRAPE_LATENCY.time():
+                    tweet_dicts = twitter_v2.search_tweets_optimized(
+                        keywords=keywords_to_search,
+                        max_tweets=count,
+                        min_relevance=0.5,
+                        days_back=days_back
                     )
-                    duplicate_count_total += len(duplicate_batch)
-
-                    logger.info(
-                        f"API call {api_calls_made}: Fetched {len(batch_results)} tweets → "
-                        f"{len(fresh_batch)} fresh, {len(duplicate_batch)} already replied"
-                    )
-
-                    # Add only fresh tweets to results
-                    tweet_dicts.extend(fresh_batch)
-                else:
-                    # No deduplication, add all tweets
-                    tweet_dicts.extend(batch_results)
-
-                # Check if we have enough fresh tweets
-                if len(tweet_dicts) >= count:
-                    logger.info(f"✅ Reached target of {count} fresh tweets!")
-                    break
-
-                # Calculate how many more we need (with buffer for potential duplicates)
-                if use_dedup:
-                    fetch_batch_size = get_fresh_tweet_count_needed(count, len(tweet_dicts))
-                else:
-                    # Without dedup, just fetch remaining count
-                    fetch_batch_size = count - len(tweet_dicts)
-
-                if fetch_batch_size == 0:
-                    break
-
-                logger.info(
-                    f"Need {count - len(tweet_dicts)} more fresh tweets, "
-                    f"fetching up to {fetch_batch_size} more (includes buffer for duplicates)"
-                )
-
-            # Clean up deduplication service
-            if dedup_service:
-                dedup_service.close()
-
-            # Trim to exact count if we got more
-            if len(tweet_dicts) > count:
-                logger.info(f"Trimming results from {len(tweet_dicts)} to {count}")
-                tweet_dicts = tweet_dicts[:count]
-
-            # Log final smart fetching stats
-            if use_dedup:
-                logger.info(
-                    "🎯 Smart fetching complete with deduplication",
-                    target_tweets=count,
-                    fresh_tweets_returned=len(tweet_dicts),
-                    duplicates_filtered=duplicate_count_total,
-                    total_fetched=len(all_fetched_tweets),
-                    efficiency=f"{len(tweet_dicts)/len(all_fetched_tweets)*100:.1f}%" if all_fetched_tweets else "N/A",
-                    api_calls=api_calls_made
-                )
-            else:
-                logger.info(
-                    "Fetching complete (no deduplication)",
-                    tweets_found=len(tweet_dicts),
-                    api_calls=api_calls_made
-                )
             
             # Save search results to cache for future use (4-day cache)
             if os.getenv("WDF_WEB_MODE", "false").lower() == "true" and tweet_dicts:

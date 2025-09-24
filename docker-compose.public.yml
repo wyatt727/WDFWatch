@@ -1,0 +1,83 @@
+# Public Access Docker Compose for WDFWatch (No SSL)
+# For quick deployment without domain/SSL setup
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: wdfwatch-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: wdfwatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+      POSTGRES_DB: wdfwatch_prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wdfwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: wdfwatch-redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Next.js Web Application - PUBLIC ACCESS
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: wdfwatch-web
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://wdfwatch:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/wdfwatch_prod?schema=public
+      REDIS_URL: redis://redis:6379/0
+      NEXTAUTH_URL: http://148.113.207.205:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-please-generate-a-secure-secret-key-here}
+    ports:
+      - "0.0.0.0:3000:3000"  # Public access on port 3000
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Ollama for LLM processing
+  ollama:
+    image: ollama/ollama:latest
+    container_name: wdfwatch-ollama
+    restart: always
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:

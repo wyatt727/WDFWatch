@@ -1,0 +1,43 @@
+{
+  "description": "Safe default settings for initial Twitter API testing",
+  "settings": {
+    "maxTweets": 20,
+    "daysBack": 3,
+    "minLikes": 5,
+    "minRetweets": 2,
+    "minReplies": 1,
+    "excludeReplies": true,
+    "excludeRetweets": true,
+    "language": "en"
+  },
+  "keywords": {
+    "maxKeywords": 30,
+    "initialKeywords": [
+      "federalism",
+      "state sovereignty",
+      "constitutional",
+      "tenth amendment",
+      "limited government"
+    ]
+  },
+  "safety": {
+    "WDF_NO_AUTO_SCRAPE": true,
+    "maxApiCallsPerRun": 10,
+    "requireManualTrigger": true,
+    "testModeFirst": true
+  },
+  "monitoring": {
+    "logAllQueries": true,
+    "saveAllResponses": true,
+    "trackApiCredits": true,
+    "alertOnHighUsage": true,
+    "highUsageThreshold": 100
+  },
+  "recommendations": [
+    "1. Start with WDF_NO_AUTO_SCRAPE=true",
+    "2. Test with cache first before real API",
+    "3. Use engagement thresholds to reduce volume",
+    "4. Monitor first few runs carefully",
+    "5. Gradually increase limits after validation"
+  ]
+}
