@@ -42,6 +42,14 @@ async function loadApiKeys() {
       apiEnvVars.TWITTER_API_KEY_SECRET = apiEnvVars.API_KEY_SECRET
     }
 
+    // CRITICAL: Ensure WDFWATCH tokens are loaded
+    if (!apiEnvVars.WDFWATCH_ACCESS_TOKEN) {
+      console.error('❌ WARNING: WDFWATCH_ACCESS_TOKEN not found in .env.wdfwatch!')
+    }
+    if (!apiEnvVars.WDFWATCH_ACCESS_TOKEN_SECRET) {
+      console.error('⚠️  WARNING: WDFWATCH_ACCESS_TOKEN_SECRET not found in .env.wdfwatch!')
+    }
+
     console.log('Successfully loaded API keys from .env.wdfwatch')
     const relevantKeys = Object.keys(apiEnvVars).filter(k =>
       k.includes('API') || k.includes('TOKEN') || k.includes('CLIENT') || k.includes('WDFWATCH')
@@ -241,7 +249,11 @@ export async function POST(
         delete cleanEnv.WDFSHOW_ACCESS_TOKEN_SECRET
 
         // Execute the Python script to post the reply
-        const command = `${pythonPath} ${scriptPath} --tweet-id "${draft.tweet.twitterId}" --message "${responseText.replace(/"/g, '\\"')}"`
+        // Use JSON.stringify for proper escaping
+        const escapedMessage = JSON.stringify(responseText).slice(1, -1) // Remove outer quotes
+        const command = `${pythonPath} ${scriptPath} --tweet-id "${draft.tweet.twitterId}" --message "${escapedMessage}"`
+
+        console.log('Executing command:', command.substring(0, 100) + '...')
 
         const { stdout, stderr } = await execAsync(command, {
           env: {
@@ -255,7 +267,11 @@ export async function POST(
             WDF_REDIS_URL: 'redis://localhost:6379/0'  // Ensure Redis URL is set
           }
         })
-        
+
+        if (stderr) {
+          console.error('Python script stderr:', stderr)
+        }
+
         console.log('Twitter reply posted:', stdout)
         
         // Update draft as posted
@@ -293,7 +309,15 @@ export async function POST(
         postResult = { success: true, message: 'Posted to Twitter' }
       } catch (error: any) {
         console.error('Failed to post to Twitter:', error)
-        postResult = { success: false, error: error.message }
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          killed: error.killed,
+          signal: error.signal,
+          stdout: error.stdout?.substring(0, 500),
+          stderr: error.stderr?.substring(0, 500)
+        })
+        postResult = { success: false, error: error.message || 'Failed to execute posting script' }
         
         // Add to queue as pending for retry
         const queueId = `${draft.tweet.twitterId}-${Date.now()}`

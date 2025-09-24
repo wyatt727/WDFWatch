@@ -315,6 +315,15 @@ export async function POST(
       // Load API keys from .env files
       const envVars = loadEnvVariables();
 
+      // Debug: Log what credentials were loaded
+      console.log('DEBUG: Loaded credentials:', {
+        WDFWATCH_ACCESS_TOKEN: envVars.WDFWATCH_ACCESS_TOKEN ? 'FOUND' : 'MISSING',
+        API_KEY: envVars.API_KEY ? 'FOUND' : 'MISSING',
+        WDF_NO_AUTO_SCRAPE: envVars.WDF_NO_AUTO_SCRAPE || 'NOT SET',
+        stageId,
+        willSetAutoScrape: stageId === 'scraping' ? 'false' : 'true'
+      });
+
       // Set timeout to 900 seconds (15 minutes) for Claude operations
       // This provides enough time for classification and response generation with large tweet batches
       const execOptions = {
@@ -340,9 +349,10 @@ export async function POST(
           TWITTER_ACCESS_TOKEN: envVars.WDFWATCH_ACCESS_TOKEN || '',
           TWITTER_ACCESS_TOKEN_SECRET: '', // OAuth 2.0 doesn't use access token secret
 
-          // Also pass the WDFwatch OAuth 2.0 tokens directly
+          // Also pass the WDFwatch OAuth 2.0 tokens directly (critical for scraping!)
           WDFWATCH_ACCESS_TOKEN: envVars.WDFWATCH_ACCESS_TOKEN || '',
           WDFWATCH_REFRESH_TOKEN: envVars.WDFWATCH_REFRESH_TOKEN || '',
+          WDFWATCH_ACCESS_TOKEN_SECRET: envVars.WDFWATCH_ACCESS_TOKEN_SECRET || '',
 
           // Override auto-scrape protection for Web UI triggered scraping
           WDF_NO_AUTO_SCRAPE: stageId === 'scraping' ? 'false' : (envVars.WDF_NO_AUTO_SCRAPE || 'true'),

@@ -16,14 +16,61 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "web" / "scripts"))
 from core import UnifiedInterface, BatchProcessor
 from core.episode_manager import EpisodeManager
 
-# Try to import web_bridge for database sync
+# Try to import web_bridge for database sync - TRY MULTIPLE PATHS
 HAS_WEB_BRIDGE = False
+sync_responses_to_database = None
+
+# Try different import paths for web_bridge
+import_attempts = []
+
+# Method 1: Try importing from current directory (symlink in claude-pipeline)
 try:
-    from web_bridge import sync_responses_to_database
+    from web_bridge import sync_responses_to_database as sync_func
+    sync_responses_to_database = sync_func
     HAS_WEB_BRIDGE = True
-except ImportError:
+    import_attempts.append(("claude-pipeline local", "SUCCESS"))
+except ImportError as e:
+    import_attempts.append(("claude-pipeline local", f"FAILED: {e}"))
+
+# Method 2: Try importing from web/scripts if first method failed
+if not HAS_WEB_BRIDGE:
+    try:
+        import sys
+        from pathlib import Path
+        web_scripts_path = Path(__file__).parent.parent.parent / "web" / "scripts"
+        if str(web_scripts_path) not in sys.path:
+            sys.path.insert(0, str(web_scripts_path))
+        from web_bridge import sync_responses_to_database as sync_func
+        sync_responses_to_database = sync_func
+        HAS_WEB_BRIDGE = True
+        import_attempts.append(("web/scripts direct", "SUCCESS"))
+    except ImportError as e:
+        import_attempts.append(("web/scripts direct", f"FAILED: {e}"))
+
+# If all imports failed, create stub function but LOG LOUDLY
+if not HAS_WEB_BRIDGE:
     logger = logging.getLogger(__name__)
-    logger.debug("WebUIBridge not available - running in file-only mode")
+    logger.error(
+        f"❌ WEB BRIDGE IMPORT FAILED - Database sync will NOT work! "
+        f"Attempts: {import_attempts}, CWD: {os.getcwd()}, "
+        f"WEB_MODE: {os.getenv('WDF_WEB_MODE')}"
+    )
+
+    def sync_responses_to_database(responses_file, episode_dir):
+        """Stub function when web_bridge is not available"""
+        logger = logging.getLogger(__name__)
+        if os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+            logger.error(
+                f"❌ CRITICAL: sync_responses_to_database called but web_bridge not imported! "
+                f"Responses NOT synced to database! File: {responses_file}"
+            )
+        return 0
+else:
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"✅ Web bridge imported successfully for response sync. "
+        f"Method: {import_attempts[-1][0] if import_attempts else 'unknown'}"
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -86,20 +133,26 @@ class ResponseGenerator:
                 json.dump(all_responses, f, indent=2)
             logger.info(f"Saved {len(all_responses)} responses to {responses_file}")
             
-            # Sync responses to database if web bridge is available
+            # Sync responses to database if web bridge is available - CRITICAL FIX
             if HAS_WEB_BRIDGE and os.getenv("WDF_WEB_MODE") == "true":
                 try:
+                    logger.info(f"🔄 Attempting to sync {len(all_responses)} responses to database for episode {episode_id}")
                     draft_count = sync_responses_to_database(
                         responses_file=str(responses_file),
                         episode_dir=episode_id
                     )
                     if draft_count > 0:
-                        logger.info(f"Successfully synced {draft_count} responses as drafts to database")
+                        logger.info(f"✅ Successfully synced {draft_count} responses as drafts to database")
                     else:
-                        logger.warning("No responses were synced to database")
+                        logger.warning("⚠️ No responses were synced to database (possibly no tweets in DB)")
                 except Exception as e:
-                    logger.warning(f"Failed to sync responses to database: {e}")
+                    logger.error(f"❌ FAILED to sync responses to database: {e}")
                     # Continue anyway - don't fail the whole pipeline
+            elif not HAS_WEB_BRIDGE and os.getenv("WDF_WEB_MODE") == "true":
+                logger.error(
+                    f"❌ CRITICAL: Web bridge NOT imported, {len(all_responses)} responses NOT synced to database! "
+                    f"Episode: {episode_id}"
+                )
         
         return all_responses
     

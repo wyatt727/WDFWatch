@@ -23,6 +23,15 @@ class TweetCache:
     """Manages cached tweets for testing without API calls"""
     
     def __init__(self, cache_file: str = "artefacts/tweet_cache.json"):
+        # Make cache file path absolute to avoid working directory issues
+        if not Path(cache_file).is_absolute():
+            # Find project root by looking for pyproject.toml
+            current_dir = Path(__file__).parent
+            while current_dir != current_dir.parent:
+                if (current_dir / "pyproject.toml").exists():
+                    cache_file = str(current_dir / cache_file)
+                    break
+                current_dir = current_dir.parent
         self.cache_file = Path(cache_file)
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
         self._cache = None
@@ -40,11 +49,14 @@ class TweetCache:
                     self._cache = json.load(f)
                     if not isinstance(self._cache, dict):
                         self._cache = {"tweets": [], "last_updated": None}
+                    print(f"🔍 CACHE DEBUG: Loaded tweet cache from {self.cache_file} with {len(self._cache.get('tweets', []))} tweets")
                     logger.info(f"Loaded tweet cache with {len(self._cache.get('tweets', []))} tweets")
             except (json.JSONDecodeError, IOError) as e:
+                print(f"🔍 CACHE DEBUG: Failed to load tweet cache from {self.cache_file}: {e}")
                 logger.warning(f"Failed to load tweet cache: {e}")
                 self._cache = {"tweets": [], "last_updated": None}
         else:
+            print(f"🔍 CACHE DEBUG: Cache file not found at {self.cache_file}")
             self._cache = {"tweets": [], "last_updated": None}
         
         return self._cache
@@ -108,6 +120,13 @@ class TweetCache:
         if keywords:
             filtered_tweets = []
             for tweet in tweets:
+                # First try to match by exact matched_keyword field
+                matched_keyword = tweet.get('matched_keyword', '')
+                if matched_keyword.lower() in [kw.lower() for kw in keywords]:
+                    filtered_tweets.append(tweet)
+                    continue
+
+                # Fallback to text content matching for backwards compatibility
                 tweet_text = tweet.get('text', '').lower()
                 if any(keyword.lower() in tweet_text for keyword in keywords):
                     filtered_tweets.append(tweet)
@@ -118,13 +137,16 @@ class TweetCache:
         
         # Return requested count
         result = tweets[:count]
-        
+
+        print(f"🔍 CACHE DEBUG: get_tweets called with keywords={keywords}, count={count}")
+        print(f"🔍 CACHE DEBUG: Found {len(result)} tweets after filtering from {len(cache.get('tweets', []))} total")
+
         logger.info(
             f"Retrieved {len(result)} tweets from cache",
             total_cached=len(cache.get('tweets', [])),
             filtered_by_keywords=bool(keywords)
         )
-        
+
         return result
     
     def clear_old_tweets(self):

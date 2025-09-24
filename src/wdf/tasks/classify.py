@@ -20,19 +20,65 @@ from prometheus_client import Counter, Histogram
 from ..settings import settings
 from ..episode_files import get_episode_file_manager
 
-# Import web bridge for classification sync
+# Import web bridge for classification sync - TRY MULTIPLE PATHS
+HAS_WEB_BRIDGE = False
+notify_classification_if_web_mode = None
+
+# Try different import paths for web_bridge
+import_attempts = []
+
+# Method 1: Try importing from claude-pipeline (using symlink)
 try:
-    web_scripts_path = Path(__file__).parent.parent.parent.parent / "web" / "scripts"
-    sys.path.insert(0, str(web_scripts_path))
-    from web_bridge import notify_classification_if_web_mode
+    claude_pipeline_path = Path(__file__).parent.parent.parent.parent / "claude-pipeline"
+    if str(claude_pipeline_path) not in sys.path:
+        sys.path.insert(0, str(claude_pipeline_path))
+    from web_bridge import notify_classification_if_web_mode as notify_func
+    notify_classification_if_web_mode = notify_func
+    HAS_WEB_BRIDGE = True
+    import_attempts.append(("claude-pipeline symlink", "SUCCESS"))
+except ImportError as e:
+    import_attempts.append(("claude-pipeline symlink", f"FAILED: {e}"))
+
+# Method 2: Try importing from web/scripts if first method failed
+if not HAS_WEB_BRIDGE:
+    try:
+        web_scripts_path = Path(__file__).parent.parent.parent.parent / "web" / "scripts"
+        if str(web_scripts_path) not in sys.path:
+            sys.path.insert(0, str(web_scripts_path))
+        from web_bridge import notify_classification_if_web_mode as notify_func
+        notify_classification_if_web_mode = notify_func
+        HAS_WEB_BRIDGE = True
+        import_attempts.append(("web/scripts direct", "SUCCESS"))
+    except ImportError as e:
+        import_attempts.append(("web/scripts direct", f"FAILED: {e}"))
+
+# If all imports failed, create stub function but LOG LOUDLY
+if not HAS_WEB_BRIDGE:
     logger_import = structlog.get_logger()
-    logger_import.debug("Web bridge imported successfully")
-except ImportError:
-    # Web bridge not available, continue without it
+    logger_import.error(
+        "❌ WEB BRIDGE IMPORT FAILED - Database sync will NOT work!",
+        import_attempts=import_attempts,
+        cwd=os.getcwd(),
+        sys_path=sys.path[:5],  # First 5 paths for debugging
+        web_mode=os.getenv("WDF_WEB_MODE")
+    )
+
     def notify_classification_if_web_mode(classified):
+        """Stub function when web_bridge is not available"""
+        if os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+            logger = structlog.get_logger()
+            logger.error(
+                "❌ CRITICAL: notify_classification_if_web_mode called but web_bridge not imported!",
+                classified_count=len(classified) if classified else 0
+            )
         pass
+else:
     logger_import = structlog.get_logger()
-    logger_import.debug("Web bridge not available, continuing without database sync")
+    logger_import.info(
+        "✅ Web bridge imported successfully for classification",
+        import_method=import_attempts[-1][0] if import_attempts else "unknown",
+        all_attempts=import_attempts
+    )
 
 # Set up structured logging
 logger = structlog.get_logger()
@@ -432,14 +478,31 @@ def run(run_id: str = None, fewshots_path: Path = None, episode_id: str = None, 
         except Exception as e:
             logger.warning(f"Failed to update keyword learning: {e}")
     
-    # Sync scores and classifications to web UI database if enabled
-    try:
-        notify_classification_if_web_mode(classified_tweets)
-        logger.info("Synced scores to web UI database")
-    except Exception as e:
-        logger.warning(
-            "Failed to sync scores to web UI",
-            error=str(e)
+    # Sync scores and classifications to web UI database if enabled - CRITICAL FIX
+    if HAS_WEB_BRIDGE and os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+        try:
+            logger.info(
+                "🔄 Attempting to sync classifications to database",
+                classified_count=len(classified_tweets),
+                episode_id=episode_id
+            )
+            notify_classification_if_web_mode(classified_tweets)
+            logger.info(
+                "✅ Successfully synced classifications to web UI database",
+                classified_count=len(classified_tweets)
+            )
+        except Exception as e:
+            logger.error(
+                "❌ FAILED to sync classifications to web UI database",
+                error=str(e),
+                has_web_bridge=HAS_WEB_BRIDGE,
+                web_mode=os.getenv("WDF_WEB_MODE")
+            )
+    elif not HAS_WEB_BRIDGE:
+        logger.error(
+            "❌ CRITICAL: Web bridge NOT imported, classifications NOT synced to database!",
+            web_mode=os.getenv("WDF_WEB_MODE"),
+            episode_id=episode_id
         )
     
     # Copy to artefacts directory if run_id is provided

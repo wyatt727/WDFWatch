@@ -102,7 +102,7 @@ class EpisodeFileManager:
             # Try to load from database if web mode
             if os.environ.get('WDF_WEB_MODE', 'false').lower() == 'true':
                 episode_info = self._load_episode_info_from_db()
-                
+
                 # Check if this is a Claude pipeline episode
                 if episode_info.get('claude_episode_dir'):
                     # Use Claude pipeline configuration
@@ -110,27 +110,92 @@ class EpisodeFileManager:
                     self.pipeline_type = 'claude'
                     # Override base path to use claude-pipeline/episodes directory
                     self.base_path = Path(os.getcwd()) / "claude-pipeline" / "episodes" / self.episode_dir
+                elif not episode_info:
+                    # No database info, check if it's a Claude pipeline directory name
+                    claude_episodes_dir = Path(os.getcwd()) / "claude-pipeline" / "episodes"
+                    direct_path = claude_episodes_dir / self.episode_id
+                    print(f"🔍 EPISODE DEBUG: Web mode, checking Claude pipeline path: {direct_path}")
+                    if direct_path.exists():
+                        self.episode_dir = self.episode_id
+                        self.base_path = direct_path
+                        self.pipeline_type = 'claude'
+                        print(f"🔍 EPISODE DEBUG: Found Claude pipeline directory in web mode: {direct_path}")
+                    else:
+                        self.episode_dir = self._generate_default_dir()
+                        self.base_path = Path(EPISODES_BASE_DIR) / self.episode_dir
                 else:
                     self.episode_dir = episode_info.get('episode_dir', self._generate_default_dir())
                     if not self.pipeline_type:
                         self.pipeline_type = episode_info.get('pipeline_type', 'legacy')
                     self.base_path = Path(EPISODES_BASE_DIR) / self.episode_dir
             else:
-                # If episode_id is numeric, use episode_{id} format for claude-pipeline
+                # Try multiple strategies to find the episode directory
+                claude_episodes_dir = Path(os.getcwd()) / "claude-pipeline" / "episodes"
+
+                # Strategy 1: If episode_id is numeric, try episode_{id} format
                 if self.episode_id.isdigit():
                     self.episode_dir = f"episode_{self.episode_id}"
-                    # Check if this is in claude-pipeline/episodes
-                    claude_path = Path(os.getcwd()) / "claude-pipeline" / "episodes" / self.episode_dir
+                    claude_path = claude_episodes_dir / self.episode_dir
+                    print(f"🔍 EPISODE DEBUG: Strategy 1 - looking for {claude_path}")
                     if claude_path.exists():
                         self.base_path = claude_path
                         self.pipeline_type = 'claude'
+                        print(f"🔍 EPISODE DEBUG: found episode directory at {claude_path}")
                     else:
-                        # Fall back to default
+                        print(f"🔍 EPISODE DEBUG: Strategy 1 failed - {claude_path} does not exist")
+                        # Strategy 2: Look for any directory containing metadata with this episode_id
+                        # This handles custom directory names like "keyword_national_divorce"
+                        found = False
+                        print(f"🔍 EPISODE DEBUG: Strategy 2 - scanning {claude_episodes_dir} for metadata.json files")
+                        if claude_episodes_dir.exists():
+                            for episode_dir in claude_episodes_dir.iterdir():
+                                if episode_dir.is_dir():
+                                    # Check metadata.json for matching episode_id
+                                    metadata_file = episode_dir / "metadata.json"
+                                    print(f"🔍 EPISODE DEBUG: checking directory {episode_dir.name}")
+                                    if metadata_file.exists():
+                                        try:
+                                            import json
+                                            with open(metadata_file) as f:
+                                                metadata = json.load(f)
+                                                metadata_episode_id = str(metadata.get("episodeId", ""))
+                                                print(f"🔍 EPISODE DEBUG: found metadata in {episode_dir.name}: episodeId={metadata_episode_id} (looking for {self.episode_id})")
+                                                # Check if this directory belongs to our episode_id
+                                                if metadata_episode_id == self.episode_id:
+                                                    self.episode_dir = episode_dir.name
+                                                    self.base_path = episode_dir
+                                                    self.pipeline_type = 'claude'
+                                                    found = True
+                                                    print(f"🔍 EPISODE DEBUG: found matching episode! Using directory {episode_dir.name}")
+                                                    logger.info(
+                                                        f"Found episode {self.episode_id} in directory {episode_dir.name}",
+                                                        metadata_episode_id=metadata.get("episodeId"),
+                                                        directory=episode_dir.name
+                                                    )
+                                                    break
+                                        except Exception as e:
+                                            print(f"🔍 EPISODE DEBUG: failed to read metadata from {metadata_file}: {e}")
+
+                        if not found:
+                            # Fall back to default
+                            print(f"🔍 EPISODE DEBUG: Strategy 2 failed - no matching episode found")
+                            self.episode_dir = self._generate_default_dir()
+                            self.base_path = Path(EPISODES_BASE_DIR) / self.episode_dir
+                            print(f"🔍 EPISODE DEBUG: using fallback episode_dir={self.episode_dir}, base_path={self.base_path}")
+                else:
+                    # Non-numeric episode_id - check if it's a direct directory name
+                    direct_path = claude_episodes_dir / self.episode_id
+                    print(f"🔍 EPISODE DEBUG: Strategy 3 - checking direct path {direct_path}")
+                    print(f"🔍 EPISODE DEBUG: CWD={os.getcwd()}, direct_path.exists()={direct_path.exists()}")
+                    if direct_path.exists():
+                        self.episode_dir = self.episode_id
+                        self.base_path = direct_path
+                        self.pipeline_type = 'claude'
+                        print(f"🔍 EPISODE DEBUG: Using Claude pipeline directory {direct_path}")
+                    else:
+                        print(f"🔍 EPISODE DEBUG: Direct path does not exist, using fallback")
                         self.episode_dir = self._generate_default_dir()
                         self.base_path = Path(EPISODES_BASE_DIR) / self.episode_dir
-                else:
-                    self.episode_dir = self._generate_default_dir()
-                    self.base_path = Path(EPISODES_BASE_DIR) / self.episode_dir
         
         # Set base path if not already set
         if not hasattr(self, 'base_path'):
@@ -177,6 +242,11 @@ class EpisodeFileManager:
     def _load_episode_info_from_db(self) -> Dict[str, Any]:
         """Load episode info from database"""
         try:
+            # Skip database lookup if episode_id is not numeric (e.g., "keyword_national_divorce")
+            if not self.episode_id.isdigit():
+                print(f"🔍 EPISODE DEBUG: Skipping database lookup for non-numeric episode_id: {self.episode_id}")
+                return {}
+
             # Try web bridge first
             try:
                 from web.scripts.web_bridge import WebUIBridge
@@ -296,8 +366,10 @@ class EpisodeFileManager:
         relative_path = self.file_config.files.get(key)
         if not relative_path:
             raise ValueError(f"Unknown output file key: {key}")
-        
-        return self.base_path / relative_path
+
+        result_path = self.base_path / relative_path
+        print(f"🔍 FILE DEBUG: get_output_path('{key}') -> base_path={self.base_path}, relative_path={relative_path}, result={result_path}")
+        return result_path
     
     def read_input(self, key: str, encoding: str = 'utf-8') -> str:
         """Read an input file"""
@@ -331,6 +403,7 @@ class EpisodeFileManager:
             # Text content
             path.write_text(content, encoding=encoding)
         
+        print(f"🔍 FILE DEBUG: saved output file key={key} to path={path}")
         logger.info(
             "Wrote output file",
             key=key,

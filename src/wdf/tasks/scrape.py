@@ -35,21 +35,78 @@ from ..twitter_client import Tweet, get_twitter_client
 from ..tweet_cache import get_tweet_cache
 from ..episode_files import get_episode_file_manager
 
-# Import web bridge for database sync
+# Import web bridge for database sync - TRY MULTIPLE PATHS
+HAS_WEB_BRIDGE = False
+sync_if_web_mode = None
+get_keywords_if_web_mode = None
+
+# Try different import paths for web_bridge
+import_attempts = []
+
+# Method 1: Try importing from claude-pipeline (using symlink)
 try:
-    web_scripts_path = Path(__file__).parent.parent.parent.parent / "web" / "scripts"
-    sys.path.insert(0, str(web_scripts_path))
-    from web_bridge import sync_if_web_mode, get_keywords_if_web_mode
+    claude_pipeline_path = Path(__file__).parent.parent.parent.parent / "claude-pipeline"
+    if str(claude_pipeline_path) not in sys.path:
+        sys.path.insert(0, str(claude_pipeline_path))
+    from web_bridge import sync_if_web_mode as sync_func, get_keywords_if_web_mode as keywords_func
+    sync_if_web_mode = sync_func
+    get_keywords_if_web_mode = keywords_func
+    HAS_WEB_BRIDGE = True
+    import_attempts.append(("claude-pipeline symlink", "SUCCESS"))
+except ImportError as e:
+    import_attempts.append(("claude-pipeline symlink", f"FAILED: {e}"))
+
+# Method 2: Try importing from web/scripts if first method failed
+if not HAS_WEB_BRIDGE:
+    try:
+        web_scripts_path = Path(__file__).parent.parent.parent.parent / "web" / "scripts"
+        if str(web_scripts_path) not in sys.path:
+            sys.path.insert(0, str(web_scripts_path))
+        from web_bridge import sync_if_web_mode as sync_func, get_keywords_if_web_mode as keywords_func
+        sync_if_web_mode = sync_func
+        get_keywords_if_web_mode = keywords_func
+        HAS_WEB_BRIDGE = True
+        import_attempts.append(("web/scripts direct", "SUCCESS"))
+    except ImportError as e:
+        import_attempts.append(("web/scripts direct", f"FAILED: {e}"))
+
+# If all imports failed, create stub functions but LOG LOUDLY
+if not HAS_WEB_BRIDGE:
     logger_import = structlog.get_logger()
-    logger_import.debug("Web bridge imported successfully")
-except ImportError:
-    # Web bridge not available, continue without it
+    logger_import.error(
+        "❌ WEB BRIDGE IMPORT FAILED - Database sync will NOT work!",
+        import_attempts=import_attempts,
+        cwd=os.getcwd(),
+        sys_path=sys.path[:5],  # First 5 paths for debugging
+        web_mode=os.getenv("WDF_WEB_MODE")
+    )
+
     def sync_if_web_mode(tweets):
+        """Stub function when web_bridge is not available"""
+        if os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+            logger = structlog.get_logger()
+            logger.error(
+                "❌ CRITICAL: sync_if_web_mode called but web_bridge not imported! Tweets NOT synced to database!",
+                tweet_count=len(tweets) if tweets else 0
+            )
         pass
+
     def get_keywords_if_web_mode(episode_id=None):
+        """Stub function when web_bridge is not available"""
+        if os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+            logger = structlog.get_logger()
+            logger.warning(
+                "⚠️ get_keywords_if_web_mode called but web_bridge not imported!",
+                episode_id=episode_id
+            )
         return None
+else:
     logger_import = structlog.get_logger()
-    logger_import.debug("Web bridge not available, continuing without database sync")
+    logger_import.info(
+        "✅ Web bridge imported successfully",
+        import_method=import_attempts[-1][0] if import_attempts else "unknown",
+        all_attempts=import_attempts
+    )
 
 # Set up structured logging
 logger = structlog.get_logger()
@@ -122,8 +179,33 @@ def load_keywords(episode_id: str = None, file_manager=None, apply_learning: boo
     Returns:
         List[dict]: List of keyword dictionaries with 'keyword' and 'weight' keys
     """
+    logger = structlog.get_logger()
+
+    logger.info(
+        "🔍 KEYWORD LOADING DEBUG - Starting keyword loading",
+        episode_id=episode_id,
+        has_file_manager=file_manager is not None,
+        file_manager_path=str(file_manager.base_path) if file_manager else None,
+        web_mode=os.getenv("WDF_WEB_MODE", "false"),
+        has_web_bridge=get_keywords_if_web_mode is not None
+    )
+
     # First try to get keywords from database if in web mode
-    db_keywords = get_keywords_if_web_mode(episode_id)
+    # IMPORTANT: For Claude pipeline episodes (with keyword_ prefix), skip database and use file
+    is_claude_episode = episode_id and (
+        episode_id.startswith('keyword_') or
+        episode_id.startswith('episode_') or
+        'claude-pipeline/episodes' in str(file_manager.base_path if file_manager else '')
+    )
+
+    if is_claude_episode:
+        logger.info("🔍 KEYWORD LOADING DEBUG - Claude pipeline episode detected, skipping database", episode_id=episode_id)
+        db_keywords = None  # Force file-based loading for Claude episodes
+    else:
+        logger.info("🔍 KEYWORD LOADING DEBUG - Trying database lookup", episode_id=episode_id)
+        db_keywords = get_keywords_if_web_mode(episode_id)
+        logger.info("🔍 KEYWORD LOADING DEBUG - Database result", db_keywords=db_keywords, result_type=type(db_keywords))
+
     if db_keywords is not None and db_keywords:  # Only use database keywords if not empty
         # Convert to dict format with weights if needed
         if isinstance(db_keywords[0], str):
@@ -159,9 +241,24 @@ def load_keywords(episode_id: str = None, file_manager=None, apply_learning: boo
         )
     
     # Try episode file manager if provided
+    logger.info("🔍 KEYWORD LOADING DEBUG - Trying episode file manager", has_file_manager=file_manager is not None)
     if file_manager:
         try:
+            logger.info("🔍 KEYWORD LOADING DEBUG - File manager details",
+                       base_path=str(file_manager.base_path),
+                       episode_dir=file_manager.episode_dir,
+                       episode_id=file_manager.episode_id)
+
+            keywords_path = file_manager.get_input_path('keywords')
+            logger.info("🔍 KEYWORD LOADING DEBUG - Keywords file path",
+                       path=str(keywords_path),
+                       exists=keywords_path.exists())
+
             keywords_text = file_manager.read_input('keywords')
+            logger.info("🔍 KEYWORD LOADING DEBUG - Read keywords text",
+                       length=len(keywords_text),
+                       preview=keywords_text[:100])
+
             keywords = json.loads(keywords_text)
             
             # Handle both formats: list of strings or list of dicts
@@ -215,9 +312,11 @@ def load_keywords(episode_id: str = None, file_manager=None, apply_learning: boo
             )
     
     # Fall back to JSON file
+    logger.info("🔍 KEYWORD LOADING DEBUG - Falling back to legacy keywords file", path=str(KEYWORDS_PATH))
     try:
         with open(KEYWORDS_PATH, "r") as f:
             keywords = json.load(f)
+            logger.info("🔍 KEYWORD LOADING DEBUG - Loaded legacy keywords", count=len(keywords) if keywords else 0)
             
         # Handle both formats
         if isinstance(keywords, list):
@@ -290,17 +389,18 @@ def load_keywords(episode_id: str = None, file_manager=None, apply_learning: boo
 def run(run_id: str = None, count: int = None, episode_id: str = None, manual_trigger: bool = False, days_back: int = None, force_refresh: bool = False) -> Path:
     """
     Run the tweet scraping task
-    
+
     Args:
         run_id: Optional run ID for artefact storage
         count: Number of tweets to scrape
         episode_id: Optional episode ID for episode-specific keywords
         manual_trigger: If True, actually call Twitter API. If False, skip API calls.
         days_back: Number of days to search back (for volume calculations)
-        
+
     Returns:
         Path: Path to the tweets file
     """
+    print(f"🔍 SCRAPE DEBUG: run() found episode_id={episode_id}, manual_trigger={manual_trigger}, count={count}")
     # Load scraping settings from database if in web mode
     scraping_settings = {}
     if os.getenv('WDF_WEB_MODE', 'false').lower() == 'true':
@@ -341,19 +441,31 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
     # Ensure settings has all values
     scraping_settings['maxTweets'] = count
     scraping_settings['daysBack'] = days_back
-    
+
+    # Create episode file manager early if episode_id provided (needed for keyword loading)
+    file_manager = None
+    use_episode_files = episode_id or os.environ.get('WDF_EPISODE_ID')
+    if use_episode_files:
+        print(f"🔍 SCRAPE DEBUG: found use_episode_files=True, creating file_manager for episode_id={episode_id}")
+        try:
+            file_manager = get_episode_file_manager(episode_id)
+            print(f"🔍 SCRAPE DEBUG: found file_manager with base_path={file_manager.base_path}")
+        except Exception as e:
+            print(f"🔍 SCRAPE ERROR: failed to create file_manager: {e}")
+            raise
+
     # Run pre-flight checks if manual trigger
     if manual_trigger and not settings.mock_mode:
         try:
             from ..preflight_check import PreflightChecker
             from ..api_monitor import get_api_monitor
-            
+
             # Initialize monitors
             checker = PreflightChecker(scraping_settings)
             monitor = get_api_monitor()
-            
-            # Load keywords for estimation
-            test_keywords = load_keywords(episode_id)[:50]  # Check with first 50 keywords
+
+            # Load keywords for estimation (now with file_manager if available)
+            test_keywords = load_keywords(episode_id, file_manager)[:50]  # Check with first 50 keywords
             
             # Run pre-flight checks
             safe_to_proceed, check_results = checker.run_all_checks(
@@ -401,13 +513,12 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
         episode_id=episode_id,
         manual_trigger=manual_trigger,
         days_back=days_back,
-        with_safety_checks=manual_trigger and not settings.mock_mode
+        with_safety_checks=manual_trigger and not settings.mock_mode,
+        has_web_bridge=HAS_WEB_BRIDGE
     )
-    
-    # Use episode file manager if episode_id provided
-    use_episode_files = episode_id or os.environ.get('WDF_EPISODE_ID')
-    if use_episode_files:
-        file_manager = get_episode_file_manager(episode_id)
+
+    # Log episode file manager status (already created earlier if needed)
+    if file_manager:
         logger.info(
             "Using episode file manager",
             episode_dir=file_manager.episode_dir
@@ -419,6 +530,7 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
         artefact_dir.mkdir(parents=True, exist_ok=True)
     
     # Check if automatic scraping is disabled
+    print(f"🔍 SCRAPE DEBUG: found manual_trigger={manual_trigger}, WDF_NO_AUTO_SCRAPE={os.getenv('WDF_NO_AUTO_SCRAPE', 'false')}")
     if not manual_trigger:
         # Check environment variable to enforce no-auto-scraping
         if os.getenv("WDF_NO_AUTO_SCRAPE", "false").lower() == "true":
@@ -432,37 +544,62 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
             tweet_cache = get_tweet_cache()
             
             # Load keywords first to filter cached tweets
-            keywords = load_keywords(episode_id, file_manager if use_episode_files else None)
+            keywords = load_keywords(episode_id, file_manager)
             
             # First check the tweet cache (extract just keyword strings for cache)
             keyword_strings = [k["keyword"] for k in keywords] if keywords and isinstance(keywords[0], dict) else keywords
+            print(f"🔍 SCRAPE DEBUG: found keywords={keyword_strings}, count={count}")
             tweet_dicts = tweet_cache.get_tweets(count=count, keywords=keyword_strings)
+            print(f"🔍 SCRAPE DEBUG: get_tweets found {len(tweet_dicts) if tweet_dicts else 0} tweets")
             
             if tweet_dicts:
+                print(f"🔍 SCRAPE DEBUG: found {len(tweet_dicts)} tweets from cache")
                 logger.info(
                     "Using cached tweets for testing",
                     count=len(tweet_dicts),
                     cache_stats=tweet_cache.get_stats()
                 )
             else:
-                # No cached tweets, check if we can generate samples
+                # No cached tweets, generate keyword-specific samples
                 if os.getenv("WDF_GENERATE_SAMPLES", "true").lower() == "true":
                     try:
-                        from scripts.generate_sample_tweets import generate_sample_tweets
-                        tweet_dicts = generate_sample_tweets(count=count, relevant_ratio=0.25)
-                        logger.info("Generated sample tweets as fallback", count=len(tweet_dicts))
-                    except ImportError:
-                        logger.warning("No cached tweets available and sample generator unavailable")
+                        # Generate tweets that actually contain our keywords
+                        from scripts.generate_relevant_tweets import generate_keyword_tweets
+                        keyword_list = [kw['keyword'] if isinstance(kw, dict) else str(kw) for kw in keywords]
+                        tweet_dicts = generate_keyword_tweets(keyword_list, count=count)
+                        logger.info(
+                            "Generated keyword-specific sample tweets",
+                            count=len(tweet_dicts),
+                            keywords=keyword_list
+                        )
+                        print(f"🔍 SCRAPE DEBUG: Generated {len(tweet_dicts)} tweets about: {', '.join(keyword_list)}")
+                    except ImportError as e:
+                        logger.warning(f"Failed to import tweet generator: {e}")
+                        # Fallback to simple generation
+                        keyword_list = [kw['keyword'] if isinstance(kw, dict) else str(kw) for kw in keywords]
                         tweet_dicts = []
+                        for i in range(min(count, 20)):
+                            keyword = keyword_list[i % len(keyword_list)]
+                            tweet_dicts.append({
+                                "id": f"t{i}_{datetime.now().timestamp()}",
+                                "text": f"Discussion about {keyword} and federalism. States need more autonomy.",
+                                "user": f"@user{i}",
+                                "created_at": datetime.now().isoformat() + "Z",
+                                "matched_keyword": keyword
+                            })
+                        logger.info(f"Generated simple fallback tweets about {keyword_list}")
                 else:
                     logger.warning("No cached tweets available and sample generation disabled")
                     tweet_dicts = []
             
             # Write tweets file
             if use_episode_files:
+                print(f"🔍 SCRAPE DEBUG: found {len(tweet_dicts)} tweets - writing via file_manager")
                 file_manager.write_output('tweets', tweet_dicts)
                 tweets_path = file_manager.get_output_path('tweets')
+                print(f"🔍 SCRAPE DEBUG: saved tweets to {tweets_path}")
             else:
+                print(f"🔍 SCRAPE DEBUG: found {len(tweet_dicts)} tweets - writing to {TWEETS_PATH}")
                 with open(TWEETS_PATH, "w") as f:
                     json.dump(tweet_dicts, f, indent=2)
                 tweets_path = TWEETS_PATH
@@ -486,9 +623,17 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
             return tweets_path
     
     # Load keywords
-    keywords = load_keywords(episode_id, file_manager if use_episode_files else None)
+    keywords = load_keywords(episode_id, file_manager)
     if not keywords:
         raise RuntimeError("No keywords found for scraping tweets")
+
+    keyword_strings = [k.get('keyword', k) if isinstance(k, dict) else k for k in keywords]
+    logger.info(
+        "Keywords loaded for scraping",
+        episode_id=episode_id,
+        keyword_count=len(keywords),
+        keywords=keyword_strings[:10]  # Show first 10
+    )
     
     # For manual trigger, temporarily override mock mode to get real client
     original_mock_mode = settings.mock_mode
@@ -876,14 +1021,31 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
             using_episode_files=use_episode_files
         )
         
-        # Sync to web UI database if enabled
-        try:
-            sync_if_web_mode(tweet_dicts)
-            logger.info("Synced tweets to web UI database")
-        except Exception as e:
-            logger.warning(
-                "Failed to sync tweets to web UI",
-                error=str(e)
+        # Sync to web UI database if enabled - CRITICAL FIX
+        if HAS_WEB_BRIDGE and os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+            try:
+                logger.info(
+                    "🔄 Attempting to sync tweets to database",
+                    tweet_count=len(tweet_dicts),
+                    episode_id=episode_id
+                )
+                sync_if_web_mode(tweet_dicts)
+                logger.info(
+                    "✅ Successfully synced tweets to web UI database",
+                    tweet_count=len(tweet_dicts)
+                )
+            except Exception as e:
+                logger.error(
+                    "❌ FAILED to sync tweets to web UI database",
+                    error=str(e),
+                    has_web_bridge=HAS_WEB_BRIDGE,
+                    web_mode=os.getenv("WDF_WEB_MODE")
+                )
+        elif not HAS_WEB_BRIDGE:
+            logger.error(
+                "❌ CRITICAL: Web bridge NOT imported, tweets NOT synced to database!",
+                web_mode=os.getenv("WDF_WEB_MODE"),
+                episode_id=episode_id
             )
         
         # Copy to artefacts directory if run_id is provided

@@ -61,6 +61,7 @@ class TwitterAPIv2:
             wdfwatch_token = get_wdfwatch_token()  # This handles refresh automatically
             self.access_token = access_token or wdfwatch_token
             self.access_token_secret = access_token_secret or ""  # Not needed for OAuth 2.0
+            self.wdfwatch_token = True  # Flag to indicate OAuth 2.0 mode with refresh
             logger.info("✅ Using WDFWATCH_ACCESS_TOKEN (OAuth 2.0 with auto-refresh)")
         except Exception as e:
             # Fallback to environment variable without auto-refresh
@@ -68,6 +69,7 @@ class TwitterAPIv2:
             if wdfwatch_token:
                 self.access_token = access_token or wdfwatch_token
                 self.access_token_secret = access_token_secret or ""
+                self.wdfwatch_token = True  # Flag to indicate OAuth 2.0 mode (no auto-refresh)
                 logger.info("✅ Using WDFWATCH_ACCESS_TOKEN (OAuth 2.0)")
             else:
                 logger.error("⚠️  WDFWATCH_ACCESS_TOKEN not found!")
@@ -75,6 +77,7 @@ class TwitterAPIv2:
                 # Only use these if explicitly passed in (for backward compatibility)
                 self.access_token = access_token or ""
                 self.access_token_secret = access_token_secret or ""
+                self.wdfwatch_token = False  # Not using OAuth 2.0
                 wdfwatch_token = None
         
         # Validate credentials
@@ -928,14 +931,28 @@ class TwitterAPIv2:
     def reply_to_tweet(self, tweet_id: str, text: str) -> bool:
         """
         Reply to a tweet - WITH SAFETY CHECKS.
-        
+
         Args:
             tweet_id: Tweet to reply to
             text: Reply text
-            
+
         Returns:
             True if successful
         """
+        # CRITICAL: Refresh token if needed (OAuth 2.0 only)
+        if hasattr(self, 'wdfwatch_token') and self.wdfwatch_token:
+            try:
+                from .token_manager import get_wdfwatch_token
+                new_token = get_wdfwatch_token()
+                if new_token != self.access_token:
+                    logger.info("Token refreshed, updating session headers")
+                    self.access_token = new_token
+                    self.session.headers.update({
+                        "Authorization": f"Bearer {self.access_token}"
+                    })
+            except Exception as e:
+                logger.warning(f"Could not refresh token: {e}")
+
         # CRITICAL: Verify account before posting
         if not hasattr(self, '_account_verified'):
             user_response = self.session.get(f"{self.BASE_URL}/users/me", timeout=30)
