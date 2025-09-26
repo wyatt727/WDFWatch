@@ -41,6 +41,8 @@ Use whichever connection is stronger for maximum engagement.
 - SUPPORT their position on separation (whether peaceful or not)
 - Mention WDF episodes exploring national divorce as viable solution
 - Reference successful historical separations (Czech/Slovakia, etc.)
+- **CRITICAL: DO NOT suggest federalism as an alternative - they've already chosen national divorce**
+- **DO NOT try to redirect them to a "middle path" - support their chosen solution**
 - Example: "You're right about separation. Rick Becker explores how states can divorce without war. See our national divorce series: [URL]"
 
 **For ANTI-NATIONAL DIVORCE tweets:**

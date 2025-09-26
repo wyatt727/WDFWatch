@@ -85,12 +85,52 @@ def load_safe_environment():
     except Exception as e:
         logger.warning(f"Could not load API keys from database: {e}")
 
+def ensure_fresh_tokens():
+    """Ensure OAuth tokens are fresh before attempting to post."""
+    import subprocess
+
+    try:
+        # Call the ensure_fresh_tokens.py script
+        script_path = Path(__file__).parent / "ensure_fresh_tokens.py"
+        python_path = sys.executable  # Use the same Python interpreter
+
+        logger.info("🔄 Ensuring tokens are fresh before posting...")
+        result = subprocess.run(
+            [python_path, str(script_path), "--max-age", "90"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            logger.info("✅ Tokens are fresh and ready for use")
+            # Reload environment to get any refreshed tokens
+            load_safe_environment()
+            return True
+        else:
+            logger.warning(f"⚠️ Token refresh had issues: {result.stderr}")
+            # Try to continue anyway
+            return True
+
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Token refresh timed out")
+        return False
+    except Exception as e:
+        logger.warning(f"⚠️ Could not ensure fresh tokens: {e}")
+        # Continue anyway - maybe tokens are still valid
+        return True
+
 def reply_safe_tweet(tweet_id, message):
     """Reply to a tweet using ONLY WDFwatch account tokens."""
-    
-    # Load environment safely
+
+    # CRITICAL: Ensure tokens are fresh before posting
+    if not ensure_fresh_tokens():
+        logger.error("❌ Failed to ensure fresh tokens - aborting for safety")
+        sys.exit(1)
+
+    # Load environment safely (this will get the refreshed tokens)
     load_safe_environment()
-    
+
     # CRITICAL: Verify we have ONLY WDFwatch tokens
     if os.getenv("ACCESS_TOKEN"):
         logger.error("=" * 60)

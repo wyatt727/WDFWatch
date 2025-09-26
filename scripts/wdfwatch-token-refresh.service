@@ -1,0 +1,19 @@
+[Unit]
+Description=WDFWatch OAuth Token Refresh Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=debian
+WorkingDirectory=/home/debian/Tools/WDFWatch
+Environment="PATH=/home/debian/Tools/WDFWatch/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/debian/Tools/WDFWatch/venv/bin/python /home/debian/Tools/WDFWatch/scripts/ensure_fresh_tokens.py --max-age 90
+StandardOutput=journal
+StandardError=journal
+
+# Restart on failure with delay
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

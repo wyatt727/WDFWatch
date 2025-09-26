@@ -12,10 +12,32 @@ import path from "path"
 
 // Helper to load API keys from .env.wdfwatch first, then database fallback
 async function loadApiKeys() {
+  // CRITICAL: Ensure tokens are fresh before loading
+  try {
+    const { exec } = await import('child_process')
+    const { promisify } = await import('util')
+    const execAsync = promisify(exec)
+
+    const pythonPath = process.env.PYTHON_PATH || '/home/debian/Tools/WDFWatch/venv/bin/python'
+    const ensureFreshScript = '/home/debian/Tools/WDFWatch/scripts/ensure_fresh_tokens.py'
+
+    // Check and refresh tokens if needed (max age: 90 minutes)
+    console.log('Ensuring tokens are fresh before loading...')
+    const { stdout, stderr } = await execAsync(`${pythonPath} ${ensureFreshScript} --max-age 90`)
+
+    if (stdout) console.log('Token refresh output:', stdout.trim())
+    if (stderr && !stderr.includes('Token is fresh')) {
+      console.error('Token refresh warning:', stderr.trim())
+    }
+  } catch (refreshError) {
+    console.error('Failed to ensure fresh tokens:', refreshError)
+    // Continue anyway - maybe tokens are still valid
+  }
+
   // CRITICAL: Always reload from .env.wdfwatch to get latest refreshed tokens
-  // Tokens may have been refreshed by Python token manager
+  // Tokens may have been refreshed by Python token manager or ensure_fresh_tokens
   const envPath = path.join(process.cwd(), '..', '.env.wdfwatch')
-  console.log('Loading API keys from .env.wdfwatch (checking for refreshed tokens):', envPath)
+  console.log('Loading API keys from .env.wdfwatch (after ensuring freshness):', envPath)
 
   try {
     const fs = await import('fs/promises')
