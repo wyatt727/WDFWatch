@@ -94,6 +94,7 @@ class TwitterAPIv2:
                 "Content-Type": "application/json"
             })
             logger.info("Using OAuth 2.0 Bearer Token authentication")
+            logger.info(f"Bearer token in session: {self.access_token[:20]}... (length: {len(self.access_token)})")
         else:
             # OAuth 1.0a session (legacy, should avoid)
             self.session = OAuth1Session(

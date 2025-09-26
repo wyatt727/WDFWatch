@@ -132,7 +132,6 @@ The reasoning should:
 2. Suggest response angles and engagement strategies
 3. Bridge tangential topics to episode content
 4. Provide actionable insights for crafting compelling responses
-5. For national divorce topics, identify stance with [PRO-ND] or [ANTI-ND] tags
 
 #### REASONING EXAMPLES:
 
@@ -147,16 +146,15 @@ SCORE: 0.75
 REASON: Complains about federal gun regulations - relates to Sheriff Mack's constitutional sheriffs discussion. Response angle: Introduce concept of county-level resistance, mention specific CSPOA victories, pivot to sheriff's oath to Constitution over federal agencies.
 ```
 
-**National Divorce Stance Examples:**
+**National Divorce Examples:**
 ```
 SCORE: 0.95
-REASON: [PRO-ND] Advocates for peaceful state separation citing irreconcilable differences. Response angle: Support their position, mention specific WDF episodes on peaceful separation, highlight successful historical precedents.
+REASON: Advocates for peaceful state separation citing irreconcilable differences. Response angle: Support their position, mention specific WDF episodes on peaceful separation, highlight successful historical precedents like Czech/Slovak split.
 ```
 
 ```
 SCORE: 0.92
-REASON: [ANTI-ND] Opposes national divorce, fears violence and chaos. Response angle: Introduce federalism as the middle path, mention nullification successes, highlight how true federalism preserves union while respecting differences.
-```
+REASON: Opposes national divorce, fears violence and chaos. Response angle: Introduce federalism as the middle path, mention nullification successes, highlight how true federalism preserves union while respecting differences.
 
 ```
 SCORE: 0.92

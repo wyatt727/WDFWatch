@@ -134,6 +134,7 @@ def reply_safe_tweet(tweet_id, message):
     
     # Initialize client with WDFwatch token
     logger.info("Initializing Twitter API v2 client with WDFwatch token...")
+    logger.info(f"Token being passed: {wdfwatch_token[:20]}... (length: {len(wdfwatch_token)})")
     twitter = TwitterAPIv2(
         api_key=api_key,
         api_secret=api_secret,

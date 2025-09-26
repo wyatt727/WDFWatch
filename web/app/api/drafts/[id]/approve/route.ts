@@ -56,6 +56,11 @@ async function loadApiKeys() {
     )
     console.log(`Found ${relevantKeys.length} API-related keys:`, relevantKeys)
 
+    // Log token preview for debugging (first 20 chars only)
+    if (apiEnvVars.WDFWATCH_ACCESS_TOKEN) {
+      console.log(`WDFWATCH_ACCESS_TOKEN loaded: ${apiEnvVars.WDFWATCH_ACCESS_TOKEN.substring(0, 20)}...`)
+    }
+
     // Clear DEBUG variable if it exists to prevent Python conflicts
     delete apiEnvVars.DEBUG
 
