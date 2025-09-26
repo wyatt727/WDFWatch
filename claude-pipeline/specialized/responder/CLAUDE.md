@@ -24,10 +24,11 @@ Use whichever connection is stronger for maximum engagement.
 
 ### Identifying Stances (even without tags)
 **Pro-National Divorce indicators:**
-- "We need to separate" / "peaceful divorce" / "irreconcilable differences"
+- "We need to separate" / "national divorce" / "irreconcilable differences"
 - "Red and blue states can't coexist" / "time to split up"
 - "Let states go their own way" / "national breakup is inevitable"
 - Supporting secession, TEXIT, or state independence movements
+- Any advocacy for states separating, regardless of method
 
 **Anti-National Divorce indicators:**
 - "We must stay united" / "preserve the union" / "we're stronger together"
@@ -37,10 +38,10 @@ Use whichever connection is stronger for maximum engagement.
 
 ### Response Strategy
 **For PRO-NATIONAL DIVORCE tweets:**
-- SUPPORT their position on peaceful separation
+- SUPPORT their position on separation (whether peaceful or not)
 - Mention WDF episodes exploring national divorce as viable solution
 - Reference successful historical separations (Czech/Slovakia, etc.)
-- Example: "You're right about peaceful separation. Rick Becker explores how states can divorce without war. See our national divorce series: [URL]"
+- Example: "You're right about separation. Rick Becker explores how states can divorce without war. See our national divorce series: [URL]"
 
 **For ANTI-NATIONAL DIVORCE tweets:**
 - DON'T argue against their unity desire

@@ -12,9 +12,10 @@ import path from "path"
 
 // Helper to load API keys from .env.wdfwatch first, then database fallback
 async function loadApiKeys() {
-  // First, try to load from .env.wdfwatch file
+  // CRITICAL: Always reload from .env.wdfwatch to get latest refreshed tokens
+  // Tokens may have been refreshed by Python token manager
   const envPath = path.join(process.cwd(), '..', '.env.wdfwatch')
-  console.log('Loading API keys from .env.wdfwatch:', envPath)
+  console.log('Loading API keys from .env.wdfwatch (checking for refreshed tokens):', envPath)
 
   try {
     const fs = await import('fs/promises')
@@ -45,6 +46,9 @@ async function loadApiKeys() {
     // CRITICAL: Ensure WDFWATCH tokens are loaded
     if (!apiEnvVars.WDFWATCH_ACCESS_TOKEN) {
       console.error('❌ WARNING: WDFWATCH_ACCESS_TOKEN not found in .env.wdfwatch!')
+    }
+    if (!apiEnvVars.WDFWATCH_REFRESH_TOKEN) {
+      console.error('❌ WARNING: WDFWATCH_REFRESH_TOKEN not found - token refresh will fail!')
     }
     if (!apiEnvVars.WDFWATCH_ACCESS_TOKEN_SECRET) {
       console.error('⚠️  WARNING: WDFWATCH_ACCESS_TOKEN_SECRET not found in .env.wdfwatch!')
