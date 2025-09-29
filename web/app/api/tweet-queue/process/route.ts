@@ -132,11 +132,11 @@ async function loadApiKeys() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { batchSize = 10 } = body
+    const { batchSize = 1000 } = body  // Process up to 1000 tweets (effectively all)
 
-    // Get pending items from the queue with approved_draft source
+    // Get ALL pending items from the queue with approved_draft source
     const queueItems = await prisma.$queryRaw<any[]>`
-      SELECT 
+      SELECT
         q.id,
         q.tweet_id as "tweetId",
         q.twitter_id as "twitterId",
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
         t.twitter_id as "originalTweetId"
       FROM tweet_queue q
       LEFT JOIN tweets t ON t.twitter_id = q.twitter_id
-      WHERE 
+      WHERE
         q.status = 'pending'
         AND q.source = 'approved_draft'
       ORDER BY q.priority DESC, q.added_at ASC
@@ -164,16 +164,26 @@ export async function POST(request: NextRequest) {
 
     const results = []
     let successCount = 0
+    let consecutiveFailures = 0  // Track consecutive failures
+    const MAX_CONSECUTIVE_FAILURES = 10  // Stop after 10 consecutive failures
+
+    console.log(`[Queue] Processing ${queueItems.length} tweets from queue...`)
 
     for (let i = 0; i < queueItems.length; i++) {
       const item = queueItems[i]
 
-      // Add delay between posts to avoid rate limiting
+      // Check if we should stop due to consecutive failures
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.error(`[Queue] Stopping - ${consecutiveFailures} consecutive failures reached`)
+        break
+      }
+
+      // Add delay between posts (2 seconds)
       // First post: no delay
-      // Subsequent posts: 5 second delay minimum
+      // Subsequent posts: 2 second delay
       if (i > 0) {
-        const delayMs = 5000 // 5 seconds between posts
-        console.log(`[Queue] Waiting ${delayMs}ms before next post to avoid rate limiting...`)
+        const delayMs = 2000 // 2 seconds between posts
+        console.log(`[Queue] Post ${i + 1}/${queueItems.length} - waiting ${delayMs}ms...`)
         await new Promise(resolve => setTimeout(resolve, delayMs))
       }
 
@@ -262,18 +272,15 @@ export async function POST(request: NextRequest) {
           }
           
           successCount++
+          consecutiveFailures = 0  // Reset consecutive failures on success
+
           results.push({
             id: item.id,
             status: 'completed',
             tweetId: twitterId
           })
 
-          // If we're getting successful posts, we can continue at current pace
-          // But if we get too many successes in a row, add a small delay
-          if (successCount > 0 && successCount % 5 === 0) {
-            console.log(`[Queue] Posted ${successCount} tweets successfully, adding extra delay...`)
-            await new Promise(resolve => setTimeout(resolve, 2000)) // Extra 2 second delay every 5 posts
-          }
+          console.log(`[Queue] ✅ Post ${i + 1}/${queueItems.length} successful (${successCount} total successes)`)
           
         } catch (execError: any) {
           console.error('Failed to post reply:', execError)
@@ -305,15 +312,19 @@ export async function POST(request: NextRequest) {
             console.log(`Tweet ${twitterId}: Tweet deleted or not found`)
           } else if (errorOutput.includes('429') ||
                      errorOutput.includes('Too Many Requests')) {
-            // Rate limited - should retry later with longer delay
+            // Rate limited - pause but don't count as failure
             errorCategory = 'rate_limited'
             shouldRetry = true
-            console.log(`Tweet ${twitterId}: Rate limited - will retry with longer delay`)
+            console.log(`Tweet ${twitterId}: Rate limited - pausing before retry`)
 
-            // Add exponential backoff for next attempt
-            const backoffDelay = 30000 * Math.pow(2, item.retryCount || 0) // 30s, 60s, 120s...
-            console.log(`[Queue] Rate limited - waiting ${backoffDelay}ms before continuing...`)
+            // Don't increment consecutive failures for rate limiting
+            // Just pause and continue
+            const backoffDelay = 30000 // Fixed 30 second delay for rate limits
+            console.log(`[Queue] Rate limited - pausing ${backoffDelay}ms before continuing...`)
             await new Promise(resolve => setTimeout(resolve, backoffDelay))
+
+            // Don't count this as a consecutive failure
+            // We'll retry this same item after the delay
           } else if (errorOutput.includes('401') ||
                      errorOutput.includes('Unauthorized')) {
             // Token issue - needs attention
@@ -353,6 +364,12 @@ export async function POST(request: NextRequest) {
             data: updateData
           })
 
+          // Increment consecutive failures for real failures (not rate limits)
+          if (errorCategory !== 'rate_limited') {
+            consecutiveFailures++
+            console.log(`[Queue] ❌ Failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES} - ${errorCategory}`)
+          }
+
           results.push({
             id: item.id,
             status: updateData.status,
@@ -363,10 +380,13 @@ export async function POST(request: NextRequest) {
         
       } catch (error: any) {
         console.error('Error processing queue item:', error)
-        results.push({ 
-          id: item.id, 
-          status: 'error', 
-          error: error.message 
+        consecutiveFailures++  // Increment on general errors too
+        console.log(`[Queue] ❌ Failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES} - general error`)
+
+        results.push({
+          id: item.id,
+          status: 'error',
+          error: error.message
         })
       }
     }
@@ -379,18 +399,30 @@ export async function POST(request: NextRequest) {
         metadata: {
           batchSize,
           processed: results.length,
+          totalInQueue: queueItems.length,
           successful: results.filter(r => r.status === 'completed').length,
-          failed: results.filter(r => r.status === 'failed').length,
+          failed: results.filter(r => r.status === 'failed' || r.status === 'error').length,
+          remaining: queueItems.length - results.length,
+          stoppedEarly: consecutiveFailures >= MAX_CONSECUTIVE_FAILURES,
+          consecutiveFailures,
           results
         }
       }
     })
 
+    const stoppedEarly = consecutiveFailures >= MAX_CONSECUTIVE_FAILURES
+    const message = stoppedEarly
+      ? `Queue processing stopped after ${consecutiveFailures} consecutive failures`
+      : 'Queue processing completed'
+
     return NextResponse.json({
-      message: 'Queue processing completed',
+      message,
       processed: results.length,
+      totalInQueue: queueItems.length,
       successful: results.filter(r => r.status === 'completed').length,
-      failed: results.filter(r => r.status === 'failed').length,
+      failed: results.filter(r => r.status === 'failed' || r.status === 'error').length,
+      remaining: queueItems.length - results.length,
+      stoppedEarly,
       results
     })
     
