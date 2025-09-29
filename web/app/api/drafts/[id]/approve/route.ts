@@ -10,9 +10,9 @@ import { emitEvent } from "@/lib/sse-events"
 import { decrypt } from "@/lib/crypto"
 import path from "path"
 
-// Helper to load API keys from .env.wdfwatch first, then database fallback
+// Helper to load API keys - gets fresh tokens directly from Python script
 async function loadApiKeys() {
-  // CRITICAL: Ensure tokens are fresh before loading
+  // CRITICAL: Get fresh tokens directly from Python script output
   try {
     const { exec } = await import('child_process')
     const { promisify } = await import('util')
@@ -21,23 +21,48 @@ async function loadApiKeys() {
     const pythonPath = process.env.PYTHON_PATH || '/home/debian/Tools/WDFWatch/venv/bin/python'
     const ensureFreshScript = '/home/debian/Tools/WDFWatch/scripts/ensure_fresh_tokens.py'
 
-    // Check and refresh tokens if needed (max age: 90 minutes)
-    console.log('Ensuring tokens are fresh before loading...')
-    const { stdout, stderr } = await execAsync(`${pythonPath} ${ensureFreshScript} --max-age 90`)
+    // Get fresh tokens as JSON output (refreshes if needed)
+    console.log('Getting fresh tokens from Python script...')
+    const { stdout, stderr } = await execAsync(`${pythonPath} ${ensureFreshScript} --max-age 90 --output-tokens`)
 
-    if (stdout) console.log('Token refresh output:', stdout.trim())
     if (stderr && !stderr.includes('Token is fresh')) {
       console.error('Token refresh warning:', stderr.trim())
     }
+
+    // Parse the JSON output from Python script
+    if (stdout) {
+      try {
+        const tokens = JSON.parse(stdout.trim())
+        console.log('✅ Successfully got fresh tokens from Python script')
+
+        // Add aliases for compatibility
+        if (tokens.API_KEY) {
+          tokens.CLIENT_ID = tokens.API_KEY
+          tokens.TWITTER_API_KEY = tokens.API_KEY
+        }
+        if (tokens.API_KEY_SECRET) {
+          tokens.CLIENT_SECRET = tokens.API_KEY_SECRET
+          tokens.TWITTER_API_KEY_SECRET = tokens.API_KEY_SECRET
+        }
+
+        // Log token preview for debugging (first 20 chars only)
+        if (tokens.WDFWATCH_ACCESS_TOKEN) {
+          console.log(`WDFWATCH_ACCESS_TOKEN: ${tokens.WDFWATCH_ACCESS_TOKEN.substring(0, 20)}...`)
+        }
+
+        return tokens
+      } catch (parseError) {
+        console.error('Failed to parse token JSON:', parseError)
+        console.error('stdout was:', stdout)
+      }
+    }
   } catch (refreshError) {
-    console.error('Failed to ensure fresh tokens:', refreshError)
-    // Continue anyway - maybe tokens are still valid
+    console.error('Failed to get fresh tokens from Python:', refreshError)
   }
 
-  // CRITICAL: Always reload from .env.wdfwatch to get latest refreshed tokens
-  // Tokens may have been refreshed by Python token manager or ensure_fresh_tokens
+  // FALLBACK: Try reading from .env.wdfwatch file if Python script fails
   const envPath = path.join(process.cwd(), '..', '.env.wdfwatch')
-  console.log('Loading API keys from .env.wdfwatch (after ensuring freshness):', envPath)
+  console.log('FALLBACK: Loading API keys from .env.wdfwatch:', envPath)
 
   try {
     const fs = await import('fs/promises')

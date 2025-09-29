@@ -12,12 +12,59 @@ import { decrypt } from '@/lib/crypto'
 
 const execAsync = promisify(exec)
 
-// Helper to load API keys from database with .env fallback
+// Helper to get fresh API keys directly from Python script
 async function loadApiKeys() {
+  // CRITICAL: Get fresh tokens directly from Python script output
+  try {
+    const pythonPath = process.env.PYTHON_PATH || '/home/debian/Tools/WDFWatch/venv/bin/python'
+    const ensureFreshScript = '/home/debian/Tools/WDFWatch/scripts/ensure_fresh_tokens.py'
+
+    // Get fresh tokens as JSON output (refreshes if needed)
+    console.log('[Queue] Getting fresh tokens from Python script...')
+    const { stdout, stderr } = await execAsync(`${pythonPath} ${ensureFreshScript} --max-age 90 --output-tokens`)
+
+    if (stderr && !stderr.includes('Token is fresh')) {
+      console.error('[Queue] Token refresh warning:', stderr.trim())
+    }
+
+    // Parse the JSON output from Python script
+    if (stdout) {
+      try {
+        const tokens = JSON.parse(stdout.trim())
+        console.log('[Queue] ✅ Successfully got fresh tokens from Python script')
+
+        // Add aliases for compatibility
+        if (tokens.API_KEY) {
+          tokens.CLIENT_ID = tokens.API_KEY
+          tokens.TWITTER_API_KEY = tokens.API_KEY
+        }
+        if (tokens.API_KEY_SECRET) {
+          tokens.CLIENT_SECRET = tokens.API_KEY_SECRET
+          tokens.TWITTER_API_KEY_SECRET = tokens.API_KEY_SECRET
+        }
+
+        // Log token status
+        if (tokens.WDFWATCH_ACCESS_TOKEN) {
+          console.log(`[Queue] WDFWATCH_ACCESS_TOKEN: ${tokens.WDFWATCH_ACCESS_TOKEN.substring(0, 20)}...`)
+        } else {
+          console.error('[Queue] ❌ No WDFWATCH_ACCESS_TOKEN found!')
+        }
+
+        return tokens
+      } catch (parseError) {
+        console.error('[Queue] Failed to parse token JSON:', parseError)
+        console.error('[Queue] stdout was:', stdout)
+      }
+    }
+  } catch (refreshError) {
+    console.error('[Queue] Failed to get fresh tokens from Python:', refreshError)
+  }
+
+  // FALLBACK: Try loading from database if Python script fails
+  console.log('[Queue] FALLBACK: Trying to load from database...')
   const apiEnvVars: Record<string, string> = {}
 
   try {
-    // First, try to load from database
     const setting = await prisma.setting.findUnique({
       where: { key: 'api_keys' }
     })
@@ -48,15 +95,15 @@ async function loadApiKeys() {
             apiEnvVars.WDFWATCH_ACCESS_TOKEN_SECRET = decrypt(encryptedConfig.twitter.accessTokenSecret)
           }
         } catch (error) {
-          console.error('Failed to decrypt Twitter API keys from database:', error)
+          console.error('[Queue] Failed to decrypt Twitter API keys:', error)
         }
       }
     }
   } catch (error) {
-    console.error('Failed to load API keys from database:', error)
+    console.error('[Queue] Failed to load API keys from database:', error)
   }
 
-  // Fallback to environment variables if not found in database
+  // Final fallback to environment variables
   if (!apiEnvVars.API_KEY) {
     const envApiKey = process.env.API_KEY || process.env.CLIENT_ID || process.env.TWITTER_API_KEY
     if (envApiKey) {
@@ -75,16 +122,8 @@ async function loadApiKeys() {
     }
   }
 
-  if (!apiEnvVars.BEARER_TOKEN && process.env.BEARER_TOKEN) {
-    apiEnvVars.BEARER_TOKEN = process.env.BEARER_TOKEN
-  }
-
   if (!apiEnvVars.WDFWATCH_ACCESS_TOKEN && process.env.WDFWATCH_ACCESS_TOKEN) {
     apiEnvVars.WDFWATCH_ACCESS_TOKEN = process.env.WDFWATCH_ACCESS_TOKEN
-  }
-
-  if (!apiEnvVars.WDFWATCH_ACCESS_TOKEN_SECRET && process.env.WDFWATCH_ACCESS_TOKEN_SECRET) {
-    apiEnvVars.WDFWATCH_ACCESS_TOKEN_SECRET = process.env.WDFWATCH_ACCESS_TOKEN_SECRET
   }
 
   return apiEnvVars
@@ -124,8 +163,20 @@ export async function POST(request: NextRequest) {
     const apiKeys = await loadApiKeys()
 
     const results = []
+    let successCount = 0
 
-    for (const item of queueItems) {
+    for (let i = 0; i < queueItems.length; i++) {
+      const item = queueItems[i]
+
+      // Add delay between posts to avoid rate limiting
+      // First post: no delay
+      // Subsequent posts: 5 second delay minimum
+      if (i > 0) {
+        const delayMs = 5000 // 5 seconds between posts
+        console.log(`[Queue] Waiting ${delayMs}ms before next post to avoid rate limiting...`)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+
       try {
         // Extract the response text from metadata
         const responseText = item.metadata?.responseText
@@ -210,11 +261,19 @@ export async function POST(request: NextRequest) {
             })
           }
           
-          results.push({ 
-            id: item.id, 
+          successCount++
+          results.push({
+            id: item.id,
             status: 'completed',
-            tweetId: twitterId 
+            tweetId: twitterId
           })
+
+          // If we're getting successful posts, we can continue at current pace
+          // But if we get too many successes in a row, add a small delay
+          if (successCount > 0 && successCount % 5 === 0) {
+            console.log(`[Queue] Posted ${successCount} tweets successfully, adding extra delay...`)
+            await new Promise(resolve => setTimeout(resolve, 2000)) // Extra 2 second delay every 5 posts
+          }
           
         } catch (execError: any) {
           console.error('Failed to post reply:', execError)
@@ -246,10 +305,15 @@ export async function POST(request: NextRequest) {
             console.log(`Tweet ${twitterId}: Tweet deleted or not found`)
           } else if (errorOutput.includes('429') ||
                      errorOutput.includes('Too Many Requests')) {
-            // Rate limited - should retry later
+            // Rate limited - should retry later with longer delay
             errorCategory = 'rate_limited'
             shouldRetry = true
-            console.log(`Tweet ${twitterId}: Rate limited`)
+            console.log(`Tweet ${twitterId}: Rate limited - will retry with longer delay`)
+
+            // Add exponential backoff for next attempt
+            const backoffDelay = 30000 * Math.pow(2, item.retryCount || 0) // 30s, 60s, 120s...
+            console.log(`[Queue] Rate limited - waiting ${backoffDelay}ms before continuing...`)
+            await new Promise(resolve => setTimeout(resolve, backoffDelay))
           } else if (errorOutput.includes('401') ||
                      errorOutput.includes('Unauthorized')) {
             // Token issue - needs attention

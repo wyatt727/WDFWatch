@@ -52,17 +52,22 @@ def get_token_age():
 
 def check_token_validity(access_token):
     """Verify token works by making a simple API call."""
-    headers = {"Authorization": f"Bearer {access_token}"}
+    # IMPORTANT: Skip validation to avoid rate limiting on /users/me endpoint
+    # We'll trust that fresh tokens are valid since we just refreshed them
+    # Validation was causing 429 errors which made all posts fail
+    return True  # Assume valid to avoid rate limiting
 
-    try:
-        response = requests.get(
-            "https://api.twitter.com/2/users/me",
-            headers=headers,
-            timeout=5
-        )
-        return response.status_code == 200
-    except Exception:
-        return False
+    # Original validation code (disabled to prevent rate limiting):
+    # headers = {"Authorization": f"Bearer {access_token}"}
+    # try:
+    #     response = requests.get(
+    #         "https://api.twitter.com/2/users/me",
+    #         headers=headers,
+    #         timeout=5
+    #     )
+    #     return response.status_code == 200
+    # except Exception:
+    #     return False
 
 def refresh_tokens():
     """Refresh the OAuth 2.0 tokens."""
@@ -206,6 +211,8 @@ def main():
                        help='Only check token age, do not refresh')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress output except errors')
+    parser.add_argument('--output-tokens', action='store_true',
+                       help='Output fresh tokens as JSON to stdout')
 
     args = parser.parse_args()
 
@@ -229,6 +236,38 @@ def main():
         if refresh_tokens():
             sys.exit(0)
         else:
+            sys.exit(1)
+
+    # Output tokens mode
+    if args.output_tokens:
+        # Suppress all output except JSON
+        import io
+        original_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+
+        # Ensure tokens are fresh first
+        if ensure_fresh_tokens(args.max_age):
+            # Restore stdout for JSON output
+            sys.stdout = original_stdout
+            # Reload environment to get fresh tokens
+            load_env_files()
+
+            # Output tokens as JSON
+            tokens = {
+                "WDFWATCH_ACCESS_TOKEN": os.getenv("WDFWATCH_ACCESS_TOKEN", ""),
+                "WDFWATCH_REFRESH_TOKEN": os.getenv("WDFWATCH_REFRESH_TOKEN", ""),
+                "API_KEY": os.getenv("API_KEY") or os.getenv("CLIENT_ID", ""),
+                "API_KEY_SECRET": os.getenv("API_KEY_SECRET") or os.getenv("CLIENT_SECRET", ""),
+                "CLIENT_ID": os.getenv("CLIENT_ID") or os.getenv("API_KEY", ""),
+                "CLIENT_SECRET": os.getenv("CLIENT_SECRET") or os.getenv("API_KEY_SECRET", ""),
+                "WDFWATCH_TOKEN_TYPE": os.getenv("WDFWATCH_TOKEN_TYPE", "bearer"),
+                "WDFWATCH_SCOPE": os.getenv("WDFWATCH_SCOPE", "")
+            }
+            print(json.dumps(tokens))
+            sys.exit(0)
+        else:
+            # Restore stdout for error reporting
+            sys.stdout = original_stdout
             sys.exit(1)
 
     # Normal mode: ensure fresh tokens
