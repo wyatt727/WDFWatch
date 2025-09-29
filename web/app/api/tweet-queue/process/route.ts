@@ -178,11 +178,11 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      // Add delay between posts (2 seconds)
+      // Add delay between posts (1 second)
       // First post: no delay
-      // Subsequent posts: 2 second delay
+      // Subsequent posts: 1 second delay
       if (i > 0) {
-        const delayMs = 2000 // 2 seconds between posts
+        const delayMs = 1000 // 1 second between posts
         console.log(`[Queue] Post ${i + 1}/${queueItems.length} - waiting ${delayMs}ms...`)
         await new Promise(resolve => setTimeout(resolve, delayMs))
       }
