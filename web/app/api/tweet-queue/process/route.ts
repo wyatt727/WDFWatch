@@ -166,6 +166,7 @@ export async function POST(request: NextRequest) {
     let successCount = 0
     let consecutiveFailures = 0  // Track consecutive failures
     const MAX_CONSECUTIVE_FAILURES = 10  // Stop after 10 consecutive failures
+    let rateLimitResetTime: number | null = null  // Track when rate limit resets
 
     console.log(`[Queue] Processing ${queueItems.length} tweets from queue...`)
 
@@ -312,19 +313,47 @@ export async function POST(request: NextRequest) {
             console.log(`Tweet ${twitterId}: Tweet deleted or not found`)
           } else if (errorOutput.includes('429') ||
                      errorOutput.includes('Too Many Requests')) {
-            // Rate limited - pause but don't count as failure
+            // Rate limited - extract reset time and wait until then
             errorCategory = 'rate_limited'
             shouldRetry = true
-            console.log(`Tweet ${twitterId}: Rate limited - pausing before retry`)
 
-            // Don't increment consecutive failures for rate limiting
-            // Just pause and continue
-            const backoffDelay = 30000 // Fixed 30 second delay for rate limits
-            console.log(`[Queue] Rate limited - pausing ${backoffDelay}ms before continuing...`)
-            await new Promise(resolve => setTimeout(resolve, backoffDelay))
+            // Try to extract rate limit reset time from error details
+            // First, check if we can get it from headers (would need to modify Python script to pass this)
+            // For now, calculate based on 15-minute windows
+            const now = new Date()
+            const currentMinute = now.getMinutes()
+            const windowStart = Math.floor(currentMinute / 15) * 15
+            const nextWindowStart = (windowStart + 15) % 60
+
+            // Create next reset time
+            const resetTime = new Date(now)
+            resetTime.setMinutes(nextWindowStart)
+            resetTime.setSeconds(0)
+            resetTime.setMilliseconds(0)
+
+            // If next window is in the past (we're near hour boundary), add an hour
+            if (resetTime <= now) {
+              resetTime.setHours(resetTime.getHours() + 1)
+            }
+
+            const waitMs = resetTime.getTime() - now.getTime()
+            const waitMinutes = Math.ceil(waitMs / 1000 / 60)
+
+            console.log(`\n⏰ RATE LIMITED - Twitter allows 50 tweets per 15-minute window`)
+            console.log(`📊 Successfully posted ${successCount} tweets so far`)
+            console.log(`🔄 Rate limit resets at ${resetTime.toLocaleTimeString()}`)
+            console.log(`⏳ Waiting ${waitMinutes} minutes for reset...`)
+            console.log(`✅ Will automatically continue processing remaining ${queueItems.length - i} tweets\n`)
+
+            // Wait until reset time
+            await new Promise(resolve => setTimeout(resolve, waitMs))
+
+            console.log(`\n🎉 Rate limit reset! Continuing to process remaining tweets...\n`)
 
             // Don't count this as a consecutive failure
-            // We'll retry this same item after the delay
+            // Retry the same item that triggered the rate limit
+            i--  // Decrement i so we retry this tweet after the loop increments
+            continue  // Skip the rest of error handling
           } else if (errorOutput.includes('401') ||
                      errorOutput.includes('Unauthorized')) {
             // Token issue - needs attention
@@ -411,9 +440,14 @@ export async function POST(request: NextRequest) {
     })
 
     const stoppedEarly = consecutiveFailures >= MAX_CONSECUTIVE_FAILURES
-    const message = stoppedEarly
-      ? `Queue processing stopped after ${consecutiveFailures} consecutive failures`
-      : 'Queue processing completed'
+    const hitRateLimit = results.some(r => r.error === 'rate_limited')
+
+    let message = 'Queue processing completed'
+    if (stoppedEarly) {
+      message = `Queue processing stopped after ${consecutiveFailures} consecutive failures`
+    } else if (hitRateLimit && results.filter(r => r.status === 'completed').length >= 45) {
+      message = `Queue processing completed successfully with automatic rate limit handling`
+    }
 
     return NextResponse.json({
       message,
