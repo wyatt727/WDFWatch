@@ -207,9 +207,9 @@ export default function TweetQueuePage() {
     }
   })
 
-  // Process queue mutation
+  // Process queue mutation - process ALL pending tweets
   const processQueueMutation = useMutation({
-    mutationFn: async (batchSize: number = 10) => {
+    mutationFn: async (batchSize: number = 1000) => {  // Process up to 1000 tweets (effectively all)
       const response = await fetch('/api/tweet-queue/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -362,7 +362,7 @@ export default function TweetQueuePage() {
                 Refresh
               </Button>
               <Button
-                onClick={() => processQueueMutation.mutate()}
+                onClick={() => processQueueMutation.mutate(1000)}  // Process all tweets
                 disabled={processQueueMutation.isPending}
               >
                 <Play className="w-4 h-4 mr-2" />
