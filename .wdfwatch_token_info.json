@@ -1,5 +1,5 @@
 {
-  "issued_at": "2025-11-02T14:04:56.116320",
+  "issued_at": "2025-11-02T16:03:28.083477",
   "expires_in": 7200,
   "token_type": "bearer",
   "scope": "tweet.write users.read tweet.read offline.access"
