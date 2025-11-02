@@ -210,10 +210,21 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  console.log('==================== DRAFT APPROVAL START ====================')
+  console.log(`[Draft Approval] Processing draft ID: ${params.id}`)
+  console.log(`[Draft Approval] Timestamp: ${new Date().toISOString()}`)
+
   try {
     const body = await request.json()
     const { finalText, scheduleAt } = body
+    console.log(`[Draft Approval] Request body:`, {
+      hasFinalText: !!finalText,
+      finalTextLength: finalText?.length,
+      scheduleAt,
+      isImmediate: !scheduleAt
+    })
 
+    console.log(`[Draft Approval] Fetching draft from database...`)
     const draft = await prisma.draftReply.findUnique({
       where: { id: parseInt(params.id) },
       include: {
@@ -222,22 +233,33 @@ export async function POST(
     })
 
     if (!draft) {
+      console.error(`[Draft Approval] ❌ DRAFT NOT FOUND: ${params.id}`)
       return NextResponse.json(
         { error: "Draft not found" },
         { status: 404 }
       )
     }
+    console.log(`[Draft Approval] ✅ Draft found:`, {
+      id: draft.id,
+      status: draft.status,
+      tweetId: draft.tweet.twitterId,
+      textLength: draft.text.length
+    })
 
     if (draft.status !== "pending") {
+      console.error(`[Draft Approval] ❌ INVALID STATUS: ${draft.status} (expected: pending)`)
       return NextResponse.json(
         { error: "Draft is not in pending status" },
         { status: 400 }
       )
     }
+    console.log(`[Draft Approval] ✅ Draft status is valid (pending)`)
 
     // Start a transaction to ensure data consistency
+    console.log(`[Draft Approval] Starting database transaction...`)
     const result = await prisma.$transaction(async (tx) => {
       // Update the draft status
+      console.log(`[Draft Approval] Updating draft status to approved...`)
       const approvedDraft = await tx.draftReply.update({
         where: { id: parseInt(params.id) },
         data: {
@@ -246,16 +268,20 @@ export async function POST(
           approvedAt: new Date(),
         },
       })
+      console.log(`[Draft Approval] ✅ Draft updated to approved`)
 
       // Update the tweet status to indicate it has an approved draft
+      console.log(`[Draft Approval] Updating tweet status to drafted...`)
       await tx.tweet.update({
         where: { id: draft.tweetId },
         data: {
           status: "drafted",
         },
       })
+      console.log(`[Draft Approval] ✅ Tweet status updated`)
 
       // Create audit log entry
+      console.log(`[Draft Approval] Creating audit log entry...`)
       await tx.auditLog.create({
         data: {
           action: "draft_approved",
@@ -270,30 +296,48 @@ export async function POST(
           },
         },
       })
+      console.log(`[Draft Approval] ✅ Audit log created`)
 
       return { approvedDraft }
     }, {
       maxWait: 10000, // Maximum time to wait for a transaction slot (10s)
       timeout: 20000, // Maximum time for the transaction to complete (20s)
     })
+    console.log(`[Draft Approval] ✅ Database transaction completed successfully`)
 
     // Post to Twitter AFTER the transaction completes
     let postResult = null
     if (!scheduleAt) {
+      console.log(`[Draft Approval] Preparing to post immediately to Twitter...`)
+
       // Post immediately to Twitter
       try {
         // Load API keys from database or .env fallback
+        console.log(`[Draft Approval] Loading API keys...`)
         const apiKeys = await loadApiKeys()
 
-        const { exec } = await import('child_process')
+        if (!apiKeys.WDFWATCH_ACCESS_TOKEN) {
+          console.error(`[Draft Approval] ❌ CRITICAL: No WDFWATCH_ACCESS_TOKEN found!`)
+        } else {
+          console.log(`[Draft Approval] ✅ API keys loaded, token: ${apiKeys.WDFWATCH_ACCESS_TOKEN.substring(0, 20)}...`)
+        }
+
+        const { execFile } = await import('child_process')
         const { promisify } = await import('util')
-        const execAsync = promisify(exec)
+        const execFileAsync = promisify(execFile)
 
         const pythonPath = process.env.PYTHON_PATH || '/home/debian/Tools/WDFWatch/venv/bin/python'
         const scriptPath = '/home/debian/Tools/WDFWatch/scripts/safe_twitter_reply.py'
         const responseText = finalText || draft.text
 
+        console.log(`[Draft Approval] Python configuration:`, {
+          pythonPath,
+          scriptPath,
+          responseTextLength: responseText.length
+        })
+
         // Clean environment to avoid conflicts
+        console.log(`[Draft Approval] Cleaning environment variables...`)
         const cleanEnv = { ...process.env }
         delete cleanEnv.DEBUG  // Remove Prisma debug flag that causes pydantic error
         // Remove dangerous tokens that could post to WDF_Show
@@ -304,14 +348,24 @@ export async function POST(
         delete cleanEnv.WDFSHOW_ACCESS_TOKEN
         delete cleanEnv.WDFSHOW_ACCESS_TOKEN_SECRET
 
-        // Execute the Python script to post the reply
-        // Use JSON.stringify for proper escaping
-        const escapedMessage = JSON.stringify(responseText).slice(1, -1) // Remove outer quotes
-        const command = `${pythonPath} ${scriptPath} --tweet-id "${draft.tweet.twitterId}" --message "${escapedMessage}"`
+        // Use execFile to pass arguments directly without shell escaping
+        // This preserves special characters (newlines, quotes, etc.) correctly
+        const args = [scriptPath, '--tweet-id', draft.tweet.twitterId, '--message', responseText]
 
-        console.log('Executing command:', command.substring(0, 100) + '...')
+        console.log('[Draft Approval] Executing Python script with args')
+        console.log(`[Draft Approval] Script: ${scriptPath}`)
+        console.log(`[Draft Approval] Tweet ID: ${draft.tweet.twitterId}`)
+        console.log(`[Draft Approval] Response length: ${responseText.length} chars`)
+        console.log(`[Draft Approval] Environment flags:`, {
+          WDFWATCH_MODE: 'true',
+          WDF_DEBUG: 'false',
+          WDF_WEB_MODE: 'true',
+          WDF_BYPASS_QUOTA_CHECK: 'true',
+          WDF_MOCK_MODE: 'false'
+        })
 
-        const { stdout, stderr } = await execAsync(command, {
+        // Use execFile instead of exec - no shell escaping needed!
+        const { stdout, stderr } = await execFileAsync(pythonPath, args, {
           env: {
             ...cleanEnv,
             ...apiKeys,  // Include loaded API keys
@@ -321,16 +375,20 @@ export async function POST(
             WDF_BYPASS_QUOTA_CHECK: 'true',  // Bypass Redis quota checking for manual posting
             WDF_MOCK_MODE: 'false',  // Force real Twitter API
             WDF_REDIS_URL: 'redis://localhost:6379/0'  // Ensure Redis URL is set
-          }
+          },
+          timeout: 25000,  // 25-second timeout for Python script (leaves 5s for other operations)
+          cwd: '/home/debian/Tools/WDFWatch'  // Set working directory
         })
 
         if (stderr) {
-          console.error('Python script stderr:', stderr)
+          console.warn('[Draft Approval] ⚠️ Python script stderr:', stderr)
         }
 
-        console.log('Twitter reply posted:', stdout)
+        console.log('[Draft Approval] ✅ Python script stdout:', stdout)
+        console.log('[Draft Approval] ✅ Twitter reply posted successfully')
         
         // Update draft as posted
+        console.log(`[Draft Approval] Updating draft status to posted...`)
         await prisma.draftReply.update({
           where: { id: draft.id },
           data: {
@@ -338,8 +396,10 @@ export async function POST(
             status: 'posted'
           }
         })
-        
+        console.log(`[Draft Approval] ✅ Draft marked as posted`)
+
         // Add to queue with completed status for tracking
+        console.log(`[Draft Approval] Adding to queue with completed status...`)
         const queueId = `${draft.tweet.twitterId}-${Date.now()}`
         await prisma.tweetQueue.create({
           data: {
@@ -361,11 +421,15 @@ export async function POST(
             retryCount: 0,
           }
         })
-        
+        console.log(`[Draft Approval] ✅ Added to queue as completed`)
+
         postResult = { success: true, message: 'Posted to Twitter' }
       } catch (error: any) {
-        console.error('Failed to post to Twitter:', error)
-        console.error('Error details:', {
+        console.error('[Draft Approval] ❌❌❌ TWITTER POSTING FAILED ❌❌❌')
+        console.error('[Draft Approval] Error type:', error.constructor.name)
+        console.error('[Draft Approval] Error message:', error.message)
+        console.error('[Draft Approval] Error code:', error.code)
+        console.error('[Draft Approval] Error details:', {
           message: error.message,
           code: error.code,
           killed: error.killed,
@@ -373,9 +437,18 @@ export async function POST(
           stdout: error.stdout?.substring(0, 500),
           stderr: error.stderr?.substring(0, 500)
         })
+
+        if (error.stdout) {
+          console.error('[Draft Approval] Full stdout:', error.stdout)
+        }
+        if (error.stderr) {
+          console.error('[Draft Approval] Full stderr:', error.stderr)
+        }
+
         postResult = { success: false, error: error.message || 'Failed to execute posting script' }
         
         // Add to queue as pending for retry
+        console.log(`[Draft Approval] Adding to queue for retry...`)
         const queueId = `${draft.tweet.twitterId}-${Date.now()}`
         await prisma.tweetQueue.create({
           data: {
@@ -395,9 +468,11 @@ export async function POST(
             retryCount: 0,
           }
         })
+        console.log(`[Draft Approval] ✅ Added to queue for retry`)
       }
     } else {
       // Add to queue for scheduled posting
+      console.log(`[Draft Approval] Scheduling for later posting at: ${scheduleAt}`)
       const queueId = `${draft.tweet.twitterId}-${Date.now()}`
       await prisma.tweetQueue.create({
         data: {
@@ -417,17 +492,22 @@ export async function POST(
           retryCount: 0,
         }
       })
+      console.log(`[Draft Approval] ✅ Added to queue as scheduled`)
       postResult = { success: true, message: 'Scheduled for later posting' }
     }
 
     // Log the result
     if (postResult) {
       if (postResult.success) {
-        console.log('✅ Tweet posted successfully:', draft.tweet.twitterId)
+        console.log(`[Draft Approval] ✅✅✅ FINAL RESULT: SUCCESS`)
+        console.log(`[Draft Approval] ✅ Tweet ${draft.tweet.twitterId} - ${postResult.message}`)
       } else {
-        console.log('⚠️ Tweet queued for retry:', postResult.error)
+        console.log(`[Draft Approval] ⚠️⚠️⚠️ FINAL RESULT: QUEUED FOR RETRY`)
+        console.log(`[Draft Approval] ⚠️ Tweet ${draft.tweet.twitterId} - Error: ${postResult.error}`)
       }
     }
+
+    console.log('==================== DRAFT APPROVAL END ====================')
 
     return NextResponse.json({
       id: result.approvedDraft.id.toString(),
@@ -436,8 +516,14 @@ export async function POST(
       text: result.approvedDraft.text,
       postResult: postResult,
     })
-  } catch (error) {
-    console.error("Failed to approve draft:", error)
+  } catch (error: any) {
+    console.error('[Draft Approval] ❌❌❌ UNEXPECTED ERROR ❌❌❌')
+    console.error('[Draft Approval] Error type:', error.constructor?.name)
+    console.error('[Draft Approval] Error message:', error.message)
+    console.error('[Draft Approval] Stack trace:', error.stack)
+    console.error('[Draft Approval] Full error object:', error)
+    console.log('==================== DRAFT APPROVAL FAILED ====================')
+
     return NextResponse.json(
       { error: "Failed to approve draft" },
       { status: 500 }

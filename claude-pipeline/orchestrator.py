@@ -400,16 +400,18 @@ class UnifiedClaudePipeline:
                             stage: str,
                             transcript_path: str,
                             episode_id: str = None,
-                            video_url: str = None) -> Dict:
+                            video_url: str = None,
+                            force_refresh: bool = False) -> Dict:
         """
         Run a single pipeline stage.
-        
+
         Args:
             stage: Stage to run ('summarize', 'classify', 'respond', 'moderate')
             transcript_path: Path to transcript file
             episode_id: Optional episode ID
             video_url: Optional YouTube URL
-            
+            force_refresh: Force refresh search boundaries when scraping
+
         Returns:
             Stage execution results
         """
@@ -449,7 +451,7 @@ class UnifiedClaudePipeline:
             if stage == 'summarize':
                 stage_result = self._run_summarize_stage(transcript, podcast_overview, episode_id, video_url)
             elif stage == 'scraping':
-                stage_result = self._run_scraping_stage(episode_id)
+                stage_result = self._run_scraping_stage(episode_id, force_refresh=force_refresh)
             elif stage == 'classify':
                 stage_result = self._run_classify_stage(episode_id)
             elif stage == 'respond':
@@ -508,7 +510,7 @@ class UnifiedClaudePipeline:
             'video_url': summary_result.get('video_url')
         }
 
-    def _run_scraping_stage(self, episode_id: str) -> Dict:
+    def _run_scraping_stage(self, episode_id: str, force_refresh: bool = False) -> Dict:
         """Execute tweet scraping stage."""
         if not episode_id:
             raise ValueError("Episode ID required for scraping stage")
@@ -540,8 +542,8 @@ class UnifiedClaudePipeline:
         ) as progress:
             task = progress.add_task(f"Scraping tweets for {len(keywords)} keywords", total=None)
 
-            # Call the real scraping method
-            tweets = self._scrape_tweets_real(keywords, episode_id)
+            # Call the real scraping method with force_refresh parameter
+            tweets = self._scrape_tweets_real(keywords, episode_id, force_refresh=force_refresh)
 
             progress.update(task, completed=100)
 
@@ -732,31 +734,71 @@ class UnifiedClaudePipeline:
         return self._scrape_tweets([], episode_id)
     
     def _load_relevant_tweets_for_episode(self, episode_id: str) -> List[Dict]:
-        """Load relevant tweets for response generation."""
+        """Load relevant tweets for response generation, excluding those with existing drafts."""
+        relevant_tweets = []
+
+        # Load from classified.json file
         episode_dir = self.episode_mgr.get_episode_dir(episode_id)
         if episode_dir:
             classified_file = episode_dir / "classified.json"
             if classified_file.exists():
                 with open(classified_file) as f:
                     classified = json.load(f)
-                    return [t for t in classified if t.get('classification') == 'RELEVANT']
-        
-        # Try database integration if in web mode
-        if os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+                    relevant_tweets = [t for t in classified if t.get('classification') == 'RELEVANT']
+
+        # If in web mode OR this is a database episode, filter out tweets that already have drafts
+        web_mode = os.getenv("WDF_WEB_MODE", "false").lower() == "true"
+        is_database_episode = episode_id and (episode_id.startswith("keyword_") or episode_id.startswith("episode_"))
+
+        if (web_mode or is_database_episode) and relevant_tweets:
             try:
                 import sys
                 project_root = Path(__file__).parent.parent
                 sys.path.insert(0, str(project_root))
-                
+
                 from web.scripts.web_bridge import get_bridge
                 bridge = get_bridge()
-                # This would need to be implemented in web_bridge
-                # For now, return empty list - could load relevant tweets from database
-                pass
+
+                # Get twitter_ids of relevant tweets
+                twitter_ids = [t.get('id', t.get('twitter_id')) for t in relevant_tweets if t.get('id') or t.get('twitter_id')]
+
+                if twitter_ids:
+                    # Check database for existing drafts
+                    with bridge.connection.cursor() as cursor:
+                        placeholders = ','.join(['%s'] * len(twitter_ids))
+                        cursor.execute(f"""
+                            SELECT DISTINCT t.twitter_id
+                            FROM tweets t
+                            JOIN draft_replies dr ON t.id = dr.tweet_id
+                            WHERE t.twitter_id IN ({placeholders})
+                              AND dr.status IN ('approved', 'posted', 'scheduled', 'rejected')
+                        """, twitter_ids)
+
+                        existing_draft_ids = {row[0] for row in cursor.fetchall()}
+
+                    if existing_draft_ids:
+                        # Filter out tweets with existing drafts
+                        original_count = len(relevant_tweets)
+                        relevant_tweets = [
+                            t for t in relevant_tweets
+                            if t.get('id', t.get('twitter_id')) not in existing_draft_ids
+                        ]
+                        filtered_count = original_count - len(relevant_tweets)
+
+                        if filtered_count > 0:
+                            console.print(
+                                f"[yellow]Filtered out {filtered_count} tweets that already have drafts[/yellow]"
+                            )
+                            logger.info(
+                                f"Skipping {filtered_count} tweets with existing drafts "
+                                f"({len(relevant_tweets)} remaining for response generation)"
+                            )
+
             except Exception as e:
-                logger.debug(f"Failed to load relevant tweets from database: {e}")
-        
-        return []
+                logger.warning(f"Failed to filter tweets with existing drafts: {e}")
+                # Continue with all relevant tweets if filter fails
+
+        return relevant_tweets
     
     def _load_responses_for_episode(self, episode_id: str) -> List[Dict]:
         """Load responses for moderation."""
@@ -819,7 +861,7 @@ class UnifiedClaudePipeline:
 
         return []
 
-    def _scrape_tweets_real(self, keywords: List[str], episode_id: str) -> List[Dict]:
+    def _scrape_tweets_real(self, keywords: List[str], episode_id: str, force_refresh: bool = False) -> List[Dict]:
         """Scrape tweets using the real scrape.py module via subprocess."""
         try:
             # Get episode directory and save keywords
@@ -850,6 +892,11 @@ class UnifiedClaudePipeline:
                 '--manual-trigger'    # CRITICAL: Must pass this flag to allow API calls
             ]
 
+            # Add force-refresh flag if requested
+            if force_refresh:
+                cmd.append('--force-refresh')
+                console.print(f"[yellow]🔄 Force refresh enabled - resetting search boundaries[/yellow]")
+
             # Set up environment for subprocess - include all necessary credentials
             env = os.environ.copy()
 
@@ -860,9 +907,15 @@ class UnifiedClaudePipeline:
             env.update({
                 # Preserve WDF_WEB_MODE from parent process if set, otherwise default to false
                 'WDF_WEB_MODE': os.environ.get('WDF_WEB_MODE', 'false'),
-                'WDF_EPISODE_ID': episode_id,
-                'PYTHONPATH': str(project_root),
-                'PYTHONUNBUFFERED': '1'  # For real-time output
+                'WDF_EPISODE_ID': episode_id,  # Episode directory name (for file operations)
+                # CRITICAL: Preserve numeric episode ID from parent for database operations
+                'WDF_CURRENT_EPISODE_ID': os.environ.get('WDF_CURRENT_EPISODE_ID', episode_id),  # Use parent's numeric ID if available
+                'PATH': f"{project_root / 'venv' / 'bin'}:{os.environ.get('PATH', '')}",  # CRITICAL: Use venv Python with dependencies
+                'PYTHONPATH': f"{project_root / 'web' / 'scripts'}:{project_root}",  # CRITICAL: Include web/scripts for web_bridge
+                'PYTHONUNBUFFERED': '1',  # For real-time output
+                'DATABASE_URL': os.environ.get('DATABASE_URL', '').split('?')[0],  # CRITICAL: For web_bridge database connection (strip Prisma params)
+                'WEB_URL': os.environ.get('WEB_URL', 'http://localhost:8888'),  # For web_bridge SSE events
+                'WEB_API_KEY': os.environ.get('WEB_API_KEY', 'development-internal-api-key'),  # For web_bridge authentication
             })
 
             # Debug: Log what environment variables we have
@@ -1462,7 +1515,12 @@ def main():
         action='store_true',
         help="Enable debug output to see detailed classifications and responses"
     )
-    
+    parser.add_argument(
+        '--force-refresh',
+        action='store_true',
+        help="Force refresh of search boundaries when scraping (ignore since_id)"
+    )
+
     args = parser.parse_args()
     
     # Set logging level based on debug flag
@@ -1558,6 +1616,7 @@ def main():
         print(f"[ORCHESTRATOR] Running single stage: {stages_to_run[0]}", flush=True)
         results = pipeline.run_individual_stage(
             stage=stages_to_run[0],
+            force_refresh=args.force_refresh,
             transcript_path=transcript_path,
             episode_id=args.episode_id,
             video_url=args.video_url

@@ -95,6 +95,9 @@ class TwitterAPIv2:
             })
             logger.info("Using OAuth 2.0 Bearer Token authentication")
             logger.info(f"Bearer token in session: {self.access_token[:20]}... (length: {len(self.access_token)})")
+            # Skip account verification for WDFwatch tokens to avoid rate limits on /users/me
+            self._account_verified = True
+            logger.info("✅ Account verification skipped (using trusted WDFwatch tokens)")
         else:
             # OAuth 1.0a session (legacy, should avoid)
             self.session = OAuth1Session(
@@ -118,13 +121,14 @@ class TwitterAPIv2:
         self.session_tweets: Set[str] = set()
         self.keyword_effectiveness: Dict[str, Dict] = {}
         
-    def search_tweets_optimized(self, keywords: List[Dict[str, float]], 
+    def search_tweets_optimized(self, keywords: List[Dict[str, float]],
                                max_tweets: int = 300,
                                min_relevance: float = 0.5,
-                               days_back: int = None) -> List[Dict]:
+                               days_back: int = None,
+                               force_refresh: bool = False) -> List[Dict]:
         """
         Search tweets with individual keyword searches for effectiveness tracking.
-        
+
         CONSERVATIVE APPROACH:
         - Sort keywords by weight (highest priority first)
         - Search each keyword individually (NO batching)
@@ -132,16 +136,17 @@ class TwitterAPIv2:
         - Track which keywords produce results
         - Respect monthly quota (10,000 reads/month)
         - STOP when max_tweets total is reached (across all keywords)
-        
+
         Args:
             keywords: List of keyword dicts with 'keyword' and 'weight'
             max_tweets: TOTAL maximum tweets to return across ALL keywords (default 300)
             min_relevance: DEPRECATED - classification handles this
             days_back: Number of days to search back
-            
+            force_refresh: If True, reset boundaries to search from scratch (get ALL tweets in time window)
+
         Returns:
             List of tweet dictionaries with keyword tracking
-            
+
         Example:
             With max_tweets=100, max_results_per_keyword=10, and 30 keywords:
             - Will search keywords in order
@@ -149,7 +154,16 @@ class TwitterAPIv2:
             - Later keywords won't be searched if limit already reached
         """
         logger.info(f"Starting individual keyword search for {len(keywords)} keywords")
-        
+
+        # CRITICAL FIX: Reset boundaries if force_refresh is enabled
+        # This ensures we get ALL tweets in the time window, not just new ones since last search
+        if force_refresh:
+            logger.info("🔄 force_refresh=True: Resetting search boundaries for all keywords")
+            keyword_strings = [k.get('keyword', k) if isinstance(k, dict) else k for k in keywords]
+            for keyword in keyword_strings:
+                self.boundary_manager.reset_keyword(keyword)
+            logger.info(f"✅ Reset boundaries for {len(keyword_strings)} keywords - will search full time window")
+
         # Update settings
         settings = self.scraping_settings.copy()
         if days_back is not None:
@@ -992,10 +1006,22 @@ class TwitterAPIv2:
                 logger.info(f"Successfully replied to tweet {tweet_id}")
                 return True
             else:
+                # Log structured error for better parsing by Node.js
+                logger.error(f"TWITTER_API_ERROR: {response.status_code}")
                 logger.error(f"Failed to reply: {response.status_code} - {response.text}")
-                
+
+                # Extract error details from response
+                try:
+                    error_json = response.json()
+                    if 'errors' in error_json:
+                        for error in error_json['errors']:
+                            logger.error(f"Twitter Error: {error}")
+                except:
+                    pass
+
         except Exception as e:
+            logger.error(f"PYTHON_EXCEPTION: {type(e).__name__}")
             logger.error(f"Reply error: {e}")
             self.quota_manager.record_api_call(endpoint="tweet_create", success=False)
-            
+
         return False

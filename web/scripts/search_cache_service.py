@@ -387,7 +387,8 @@ def optimize_keyword_search(keywords: List[str],
             'cached_keywords': [],
             'keywords_to_search': keywords,
             'estimated_api_calls_saved': 0,
-            'recommendations': ["Force refresh mode - all keywords will be searched"]
+            'recommendations': ["Force refresh mode - all keywords will be searched"],
+            'skip_all_api_calls': False  # CRITICAL: Must include this key to prevent KeyError in scrape.py
         }
     
     service = SearchCacheService()

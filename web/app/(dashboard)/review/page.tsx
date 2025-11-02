@@ -41,41 +41,105 @@ export default function ReviewPage() {
   const currentDraft = drafts[currentIndex]
 
   const handleApprove = async (draftId: string, finalText: string) => {
+    console.log('==================== CLIENT: APPROVE DRAFT START ====================')
+    console.log('[CLIENT] Draft ID:', draftId)
+    console.log('[CLIENT] Final text length:', finalText.length)
+    console.log('[CLIENT] Final text preview:', finalText.substring(0, 50) + '...')
+    console.log('[CLIENT] Timestamp:', new Date().toISOString())
+
     try {
+      console.log('[CLIENT] Sending POST request to:', `/api/drafts/${draftId}/approve`)
+      console.log('[CLIENT] Request body:', JSON.stringify({ finalText }).substring(0, 200))
+
+      // Add 30-second timeout to prevent silent hanging
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => {
+        console.error('[CLIENT] ❌ REQUEST TIMEOUT: Aborting after 30 seconds')
+        controller.abort()
+      }, 30000)
+
       const response = await fetch(`/api/drafts/${draftId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ finalText }),
+        signal: controller.signal
+      })
+
+      clearTimeout(timeoutId)
+      console.log('[CLIENT] Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
       })
 
       if (!response.ok) {
-        throw new Error("Failed to approve draft")
+        const errorText = await response.text()
+        console.error('[CLIENT] ❌ Response not OK:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        })
+        throw new Error(`Failed to approve draft: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
+      const result = await response.json()
+      console.log('[CLIENT] ✅ Response data:', result)
+      console.log('[CLIENT] Post result:', result.postResult)
+
       // Refresh drafts list
+      console.log('[CLIENT] Refreshing drafts list...')
       await refetch()
-    } catch (error) {
-      console.error("Error approving draft:", error)
+      console.log('[CLIENT] ✅ Drafts list refreshed')
+      console.log('==================== CLIENT: APPROVE DRAFT SUCCESS ====================')
+    } catch (error: any) {
+      console.error('==================== CLIENT: APPROVE DRAFT ERROR ====================')
+      console.error('[CLIENT] ❌ Error type:', error?.constructor?.name)
+      console.error('[CLIENT] ❌ Error message:', error?.message)
+      console.error('[CLIENT] ❌ Error stack:', error?.stack)
+
+      if (error.name === 'AbortError') {
+        console.error('[CLIENT] ❌ Request was aborted due to timeout')
+      }
+
+      console.error('[CLIENT] Full error object:', error)
+      console.error('==================== CLIENT: APPROVE DRAFT FAILED ====================')
       throw error
     }
   }
 
   const handleReject = async (draftId: string, reason?: string) => {
+    console.log('[CLIENT] Rejecting draft:', draftId, 'Reason:', reason)
     try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => {
+        console.error('[CLIENT] ❌ REJECT REQUEST TIMEOUT: Aborting after 30 seconds')
+        controller.abort()
+      }, 30000)
+
       const response = await fetch(`/api/drafts/${draftId}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: reason || "Manual rejection" }),
+        signal: controller.signal
       })
 
+      clearTimeout(timeoutId)
+      console.log('[CLIENT] Reject response:', response.status, response.statusText)
+
       if (!response.ok) {
-        throw new Error("Failed to reject draft")
+        const errorText = await response.text()
+        console.error('[CLIENT] ❌ Reject failed:', errorText)
+        throw new Error(`Failed to reject draft: ${response.status} ${errorText}`)
       }
 
       // Refresh drafts list
+      console.log('[CLIENT] Refreshing after reject...')
       await refetch()
-    } catch (error) {
-      console.error("Error rejecting draft:", error)
+    } catch (error: any) {
+      console.error('[CLIENT] ❌ Error rejecting draft:', error)
+      if (error.name === 'AbortError') {
+        console.error('[CLIENT] ❌ Reject request timed out')
+      }
       throw error
     }
   }

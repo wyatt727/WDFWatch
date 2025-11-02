@@ -46,7 +46,7 @@ class WDFSettings(BaseSettings):
     
     # Service connections
     ollama_host: str = "http://localhost:11434"
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://localhost:6380/0"
     
     # Prefect configuration
     prefect_workspace: str = "wdf-prod"

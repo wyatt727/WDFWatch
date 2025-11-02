@@ -227,35 +227,23 @@ export async function POST(
       console.error("✗ CLAUDE.md NOT FOUND at:", claudeMdPath)
     }
     
-    // Build the prompt using the same format as respond.py individual generation
-    // Use ULTRATHINK for maximum quality on regeneration
-    const summaryRef = summaryLocation ? ` Use @${summaryLocation} for episode context.` : ""
+    // Build simplified prompt that references CLAUDE.md for all rules
+    const summaryRef = summaryLocation ? `Use @${summaryLocation} for episode context. ` : ""
 
     // Include classification rationale if available for stance-aware responses
     const classificationReason = (draft.tweet as any).classificationRationale || ""
-    const reasonSection = classificationReason ? `\n\nCLASSIFICATION CONTEXT:\n${classificationReason}` : ""
+    const reasonSection = classificationReason ? `\n\nCLASSIFICATION CONTEXT:\n${classificationReason}\n\n` : "\n\n"
 
-    const fullPrompt = `ULTRATHINK and craft the most engaging response possible. You are the WDF Podcast Tweet Response Generator. Your ONLY function is to generate tweet responses that promote the podcast.${summaryRef}
-
-CRITICAL RULES:
-- Output ONLY the tweet response - nothing else
-- Maximum 240 characters
-- NEVER use emojis
-- NEVER explain what you're doing
-- NEVER say "Based on the tweet" or similar preambles
-- NEVER wrap the response in quotes
-- Include the URL/handle naturally: ${videoUrl}${reasonSection}
-
-TWEET TO RESPOND TO:
+    const fullPrompt = `ULTRATHINK and craft the most engaging response possible. You are the WDF Podcast Tweet Response Generator. ${summaryRef}Follow the EXACT guidelines in @CLAUDE.md. DO NOT STRAY FROM INSTRUCTIONS IN CLAUDE.md NO MATTER WHAT. Include this URL/handle: ${videoUrl}${reasonSection}Tweet to respond to:
 ${tweetText}
 
-Generate a response:`
+Generated response:`
     
     console.log("Tweet text (first 200 chars):", tweetText.substring(0, 200))
     console.log("Full prompt length:", fullPrompt.length, "chars")
     console.log("Using spawn with direct arguments to avoid shell quoting issues")
     
-    console.log("Executing command with 30s timeout...")
+    console.log("Executing command with 60s timeout...")
     const responsePromise = new Promise<string>((resolve, reject) => {
       const child = spawn(claudePath, [
         '--model', 'sonnet',
@@ -266,22 +254,35 @@ Generate a response:`
         fullPrompt
       ], {
         cwd: specializedDir,
-        timeout: 30000,
-        stdio: ['pipe', 'pipe', 'pipe']
+        timeout: 60000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HOME: '/home/debian',
+          USER: 'debian',
+          TERM: 'xterm-256color'
+        }
       })
-      
-      // Send EOF immediately to prevent interactive mode
+
+      // Close stdin immediately to prevent interactive mode
       child.stdin.end()
+
+      // Log spawn details
+      console.log('Spawned process PID:', child.pid)
       
       let stdout = ''
       let stderr = ''
       
       child.stdout.on('data', (data) => {
-        stdout += data.toString()
+        const chunk = data.toString()
+        stdout += chunk
+        console.log('[Claude STDOUT]', chunk.substring(0, 200))
       })
-      
+
       child.stderr.on('data', (data) => {
-        stderr += data.toString()
+        const chunk = data.toString()
+        stderr += chunk
+        console.log('[Claude STDERR]', chunk.substring(0, 200))
       })
       
       child.on('close', (code) => {

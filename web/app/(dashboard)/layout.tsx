@@ -22,7 +22,7 @@ export default function DashboardLayout({
       <Navigation />
       
       {/* Main content area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar with quota meter */}
         <header className="border-b px-6 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">WDFWatch</h1>
@@ -30,7 +30,7 @@ export default function DashboardLayout({
         </header>
         
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6">
           {children}
         </main>
       </div>

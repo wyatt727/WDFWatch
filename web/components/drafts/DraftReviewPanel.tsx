@@ -10,6 +10,7 @@ import { TweetContext } from "./TweetContext"
 import { DraftEditor } from "./DraftEditor"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
+import { cn } from "@/lib/utils"
 import { CheckCircle2, XCircle, Clock, AlertCircle, RotateCw } from "lucide-react"
 
 interface DraftReviewPanelProps {
@@ -43,53 +44,95 @@ export function DraftReviewPanel({
   }
 
   const handleApprove = async () => {
-    if (!onApprove) return
+    console.log('==================== UI: APPROVE BUTTON CLICKED ====================')
+    console.log('[UI] Draft ID:', draft.id)
+    console.log('[UI] Draft status:', draft.status)
+    console.log('[UI] Original text:', draft.text.substring(0, 50) + '...')
+    console.log('[UI] Edited text:', editedText.substring(0, 50) + '...')
+    console.log('[UI] Text changed:', editedText !== draft.text)
+    console.log('[UI] Character count:', characterCount)
+
+    if (!onApprove) {
+      console.error('[UI] ❌ onApprove prop is undefined!')
+      return
+    }
 
     setIsSubmitting(true)
+    console.log('[UI] Submitting state set to true')
+
     try {
+      console.log('[UI] Calling onApprove function...')
+      const startTime = Date.now()
+
       await onApprove(draft.id, editedText)
+
+      const endTime = Date.now()
+      console.log(`[UI] ✅ onApprove completed in ${endTime - startTime}ms`)
+
       toast({
         title: "Draft approved",
         description: "The response has been approved and queued for posting.",
       })
+      console.log('[UI] Toast notification shown')
+
+      console.log('[UI] Calling onNext to move to next draft...')
       onNext?.()
-    } catch (error) {
+      console.log('==================== UI: APPROVE SUCCESS ====================')
+    } catch (error: any) {
+      console.error('==================== UI: APPROVE ERROR ====================')
+      console.error('[UI] ❌ Error caught in handleApprove')
+      console.error('[UI] Error type:', error?.constructor?.name)
+      console.error('[UI] Error message:', error?.message)
+      console.error('[UI] Error stack:', error?.stack)
+      console.error('[UI] Full error:', error)
+
       toast({
         title: "Error",
-        description: "Failed to approve draft. Please try again.",
+        description: error?.message || "Failed to approve draft. Please try again.",
         variant: "destructive",
       })
+      console.error('==================== UI: APPROVE FAILED ====================')
     } finally {
       setIsSubmitting(false)
+      console.log('[UI] Submitting state set to false')
     }
   }
 
   const handleRegenerate = async () => {
+    console.log('[UI] Regenerate clicked for draft:', draft.id)
     setIsRegenerating(true)
     try {
+      console.log('[UI] Sending regenerate request...')
       const response = await fetch(`/api/drafts/${draft.id}/regenerate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       })
 
       if (!response.ok) {
+        console.error('[UI] ❌ Regenerate failed:', response.status, response.statusText)
         const error = await response.json()
         throw new Error(error.error || "Failed to regenerate")
       }
 
       const result = await response.json()
-      
+      console.log('[UI] ✅ Regenerate successful:', result)
+
       // Update the local state with the new response
       setEditedText(result.text)
       setCharacterCount(result.text.length)
       setRegenerationCount(prev => prev + 1)
-      
+
       toast({
         title: "Response regenerated",
         description: `New response generated (v${result.version})`,
       })
-    } catch (error) {
-      console.error("Error regenerating response:", error)
+    } catch (error: any) {
+      console.error('[UI] ❌ Error regenerating response:', error)
+      console.error('[UI] Error details:', {
+        type: error?.constructor?.name,
+        message: error?.message,
+        stack: error?.stack
+      })
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to regenerate response",
@@ -97,6 +140,7 @@ export function DraftReviewPanel({
       })
     } finally {
       setIsRegenerating(false)
+      console.log('[UI] Regenerating state reset')
     }
   }
 
@@ -280,12 +324,26 @@ export function DraftReviewPanel({
           {/* Primary actions row */}
           <div className="flex gap-3">
             <Button
-              onClick={handleApprove}
+              onClick={() => {
+                console.log('[UI] === APPROVE BUTTON CLICKED ===')
+                console.log('[UI] Button state:', {
+                  isSubmitting,
+                  isRegenerating,
+                  characterCount,
+                  hasOnApprove: !!onApprove,
+                  disabled: isSubmitting || isRegenerating || characterCount > 280 || !onApprove
+                })
+                if (isSubmitting) console.warn('[UI] ⚠️ Already submitting!')
+                if (isRegenerating) console.warn('[UI] ⚠️ Currently regenerating!')
+                if (characterCount > 280) console.warn('[UI] ⚠️ Text too long!')
+                if (!onApprove) console.error('[UI] ❌ No onApprove handler!')
+                handleApprove()
+              }}
               disabled={isSubmitting || isRegenerating || characterCount > 280 || !onApprove}
               className="flex-1"
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Approve & Post
+              {isSubmitting ? 'Posting...' : 'Approve & Post'}
             </Button>
             <Button
               onClick={handleRegenerate}
@@ -350,6 +408,3 @@ export function DraftReviewPanel({
     </div>
   )
 }
-
-// Import cn utility if not already imported
-import { cn } from "@/lib/utils"

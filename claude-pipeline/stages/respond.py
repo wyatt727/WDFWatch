@@ -134,7 +134,13 @@ class ResponseGenerator:
             logger.info(f"Saved {len(all_responses)} responses to {responses_file}")
             
             # Sync responses to database if web bridge is available - CRITICAL FIX
-            if HAS_WEB_BRIDGE and os.getenv("WDF_WEB_MODE") == "true":
+            # Auto-enable web mode if episode_id looks like a database-backed episode (keyword_* or episode_*)
+            web_mode = os.getenv("WDF_WEB_MODE", "false").lower() == "true"
+            is_database_episode = episode_id and (episode_id.startswith("keyword_") or episode_id.startswith("episode_"))
+
+            if HAS_WEB_BRIDGE and (web_mode or is_database_episode):
+                if not web_mode and is_database_episode:
+                    logger.info(f"🔄 Auto-enabling web mode for database episode: {episode_id}")
                 try:
                     logger.info(f"🔄 Attempting to sync {len(all_responses)} responses to database for episode {episode_id}")
                     draft_count = sync_responses_to_database(
@@ -144,14 +150,14 @@ class ResponseGenerator:
                     if draft_count > 0:
                         logger.info(f"✅ Successfully synced {draft_count} responses as drafts to database")
                     else:
-                        logger.warning("⚠️ No responses were synced to database (possibly no tweets in DB)")
+                        logger.warning("⚠️ No responses were synced to database (possibly no tweets in DB or all tweets already have drafts)")
                 except Exception as e:
                     logger.error(f"❌ FAILED to sync responses to database: {e}")
                     # Continue anyway - don't fail the whole pipeline
-            elif not HAS_WEB_BRIDGE and os.getenv("WDF_WEB_MODE") == "true":
+            elif not HAS_WEB_BRIDGE and (web_mode or is_database_episode):
                 logger.error(
                     f"❌ CRITICAL: Web bridge NOT imported, {len(all_responses)} responses NOT synced to database! "
-                    f"Episode: {episode_id}"
+                    f"Episode: {episode_id}, WDF_WEB_MODE: {web_mode}, Is Database Episode: {is_database_episode}"
                 )
         
         return all_responses

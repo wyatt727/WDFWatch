@@ -295,11 +295,13 @@ export async function POST(
       const claudeStage = WEB_TO_CLAUDE_STAGE_MAP[stageId] || stageId;
       const episodeDirName = episode.claudeEpisodeDir || episode.episodeDir || '';
 
-      console.log(`Option 3 exec() execution: stage=${claudeStage}, episode=${episodeDirName}`);
+      console.log(`Option 3 exec() execution: stage=${claudeStage}, episode=${episodeDirName}, forceRefresh=${forceRefresh}`);
 
       // Build the shell command using 'script' to provide a PTY
       // This is critical for claude CLI to work properly
-      const pythonCommand = `/home/debian/Tools/WDFWatch/venv/bin/python claude-pipeline/orchestrator.py --episode-id ${episodeDirName} --stages ${claudeStage}`;
+      // Add --force-refresh flag when scraping with force refresh enabled
+      const forceRefreshFlag = (stageId === 'scraping' && forceRefresh) ? ' --force-refresh' : '';
+      const pythonCommand = `/home/debian/Tools/WDFWatch/venv/bin/python claude-pipeline/orchestrator.py --episode-id ${episodeDirName} --stages ${claudeStage}${forceRefreshFlag}`;
 
       const shellCommand = `
         source ~/.zshrc && \
@@ -334,11 +336,15 @@ export async function POST(
           // Pass minimal environment to avoid conflicts
           HOME: process.env.HOME || '/home/debian',
           USER: process.env.USER || 'debian',
+          PATH: `/home/debian/Tools/WDFWatch/venv/bin:${process.env.PATH}`, // CRITICAL: Ensure venv Python is used
+          PYTHONPATH: '/home/debian/Tools/WDFWatch/web/scripts:/home/debian/Tools/WDFWatch', // CRITICAL: For web_bridge import
           WDF_WEB_MODE: 'true',
-          WDF_EPISODE_ID: episodeId.toString(),
+          WDF_EPISODE_ID: episodeId.toString(),  // Numeric database ID for web_bridge
+          WDF_CURRENT_EPISODE_ID: episodeId.toString(), // CRITICAL: Numeric database ID (web_bridge expects this)
           WDF_RUN_ID: runId,
           DATABASE_URL: (process.env.DATABASE_URL || '').split('?')[0] || 'postgresql://postgres:password@localhost:5432/wdfwatch',
           WEB_URL: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8888',
+          WEB_API_KEY: process.env.WEB_API_KEY || 'development-internal-api-key', // CRITICAL: web_bridge needs this
           PYTHONUNBUFFERED: '1', // For real-time output
           // Claude Code environment variables (added back for testing)
           CLAUDECODE: '1',

@@ -111,6 +111,138 @@ else:
 # Set up structured logging
 logger = structlog.get_logger()
 
+
+def get_existing_tweet_ids_from_db(episode_id: str = None) -> set:
+    """
+    Get Twitter IDs of tweets that already exist in the database for this episode.
+    Optionally filter to only tweets that already have drafts (to avoid re-scraping processed tweets).
+
+    Args:
+        episode_id: Episode ID or directory name to check
+
+    Returns:
+        Set of Twitter IDs (strings) that already exist in database
+    """
+    if not HAS_WEB_BRIDGE:
+        return set()
+
+    if not os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+        return set()
+
+    try:
+        from pathlib import Path
+        import sys
+        project_root = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(project_root / "web" / "scripts"))
+
+        from web_bridge import get_bridge
+        bridge = get_bridge()
+
+        # Get database episode ID from directory name
+        db_episode_id = None
+        if episode_id:
+            with bridge.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id FROM podcast_episodes
+                    WHERE claude_episode_dir = %s OR CAST(id AS TEXT) = %s
+                """, (episode_id, episode_id))
+                result = cursor.fetchone()
+                if result:
+                    db_episode_id = result[0]
+
+        if not db_episode_id:
+            logger.debug("No database episode found, will not filter existing tweets")
+            return set()
+
+        # Get ALL tweets for this episode (we'll filter them appropriately)
+        with bridge.connection.cursor() as cursor:
+            # Get tweets that already have ANY draft (pending, approved, posted, rejected)
+            # These tweets should not be re-scraped
+            cursor.execute("""
+                SELECT DISTINCT t.twitter_id
+                FROM tweets t
+                LEFT JOIN draft_replies dr ON t.id = dr.tweet_id
+                WHERE t.episode_id = %s
+            """, (db_episode_id,))
+
+            existing_ids = {row[0] for row in cursor.fetchall()}
+
+        logger.info(
+            f"Found {len(existing_ids)} tweets already in database for episode {episode_id}",
+            episode_id=episode_id,
+            db_episode_id=db_episode_id,
+            existing_count=len(existing_ids)
+        )
+
+        return existing_ids
+
+    except Exception as e:
+        logger.warning(f"Failed to get existing tweet IDs from database: {e}")
+        return set()
+
+
+def get_tweets_needing_drafts(episode_id: str = None) -> int:
+    """
+    Count how many tweets in the database need drafts created.
+
+    Returns number of tweets that are classified but don't have drafts yet.
+    """
+    if not HAS_WEB_BRIDGE:
+        return 0
+
+    if not os.getenv("WDF_WEB_MODE", "false").lower() == "true":
+        return 0
+
+    try:
+        from pathlib import Path
+        import sys
+        project_root = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(project_root / "web" / "scripts"))
+
+        from web_bridge import get_bridge
+        bridge = get_bridge()
+
+        # Get database episode ID
+        db_episode_id = None
+        if episode_id:
+            with bridge.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id FROM podcast_episodes
+                    WHERE claude_episode_dir = %s OR CAST(id AS TEXT) = %s
+                """, (episode_id, episode_id))
+                result = cursor.fetchone()
+                if result:
+                    db_episode_id = result[0]
+
+        if not db_episode_id:
+            return 0
+
+        # Count tweets that are classified as relevant but don't have drafts
+        with bridge.connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM tweets t
+                LEFT JOIN draft_replies dr ON t.id = dr.tweet_id
+                WHERE t.episode_id = %s
+                  AND t.status = 'relevant'
+                  AND dr.id IS NULL
+            """, (db_episode_id,))
+
+            count = cursor.fetchone()[0]
+
+        logger.info(
+            f"Found {count} tweets needing drafts for episode {episode_id}",
+            episode_id=episode_id,
+            db_episode_id=db_episode_id,
+            needing_drafts=count
+        )
+
+        return count
+
+    except Exception as e:
+        logger.warning(f"Failed to count tweets needing drafts: {e}")
+        return 0
+
 # Prometheus metrics - handle duplicate registration gracefully
 try:
     SCRAPE_LATENCY = Histogram(
@@ -591,7 +723,23 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
                 else:
                     logger.warning("No cached tweets available and sample generation disabled")
                     tweet_dicts = []
-            
+
+            # CRITICAL FIX: Filter out existing tweets even for cache/sample path
+            if episode_id and tweet_dicts:
+                existing_ids = get_existing_tweet_ids_from_db(episode_id)
+                if existing_ids:
+                    original_count = len(tweet_dicts)
+                    tweet_dicts = [t for t in tweet_dicts if t.get('id') not in existing_ids]
+                    filtered_count = original_count - len(tweet_dicts)
+
+                    if filtered_count > 0:
+                        logger.info(
+                            f"🔍 Filtered {filtered_count} cached/sample tweets that already exist in database",
+                            original_count=original_count,
+                            new_tweets=len(tweet_dicts),
+                            episode_id=episode_id
+                        )
+
             # Write tweets file
             if use_episode_files:
                 print(f"🔍 SCRAPE DEBUG: found {len(tweet_dicts)} tweets - writing via file_manager")
@@ -697,10 +845,32 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
                             
                             # Use cached tweets
                             tweet_dicts = cache_results['cached_tweets'][:count]  # Limit to requested count
-                            
+
+                            # CRITICAL FIX: Filter out existing tweets from cached results
+                            if episode_id and tweet_dicts:
+                                existing_ids = get_existing_tweet_ids_from_db(episode_id)
+                                if existing_ids:
+                                    original_count = len(tweet_dicts)
+                                    tweet_dicts = [t for t in tweet_dicts if t.get('id') not in existing_ids]
+                                    filtered_count = original_count - len(tweet_dicts)
+
+                                    if filtered_count > 0:
+                                        logger.info(
+                                            f"🔍 Filtered {filtered_count} cached search results that already exist in database",
+                                            original_count=original_count,
+                                            new_tweets=len(tweet_dicts),
+                                            episode_id=episode_id
+                                        )
+
+                                        if len(tweet_dicts) < count:
+                                            logger.warning(
+                                                f"⚠️  After filtering, only {len(tweet_dicts)} new tweets available from cache "
+                                                f"(requested {count}). Consider force_refresh=True to get fresh tweets."
+                                            )
+
                             # Sync to web (will update any metadata)
                             sync_if_web_mode(tweet_dicts)
-                            
+
                             # Write tweets file and return
                             if use_episode_files:
                                 file_manager.write_output('tweets', tweet_dicts)
@@ -848,7 +1018,8 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
                         keywords=keywords_to_search,
                         max_tweets=count,
                         min_relevance=0.5,
-                        days_back=days_back
+                        days_back=days_back,
+                        force_refresh=force_refresh
                     )
                 logger.info(f"Standard search returned {len(tweet_dicts)} tweets")
 
@@ -860,7 +1031,8 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
                         keywords=keywords_to_search,
                         max_tweets=count,
                         min_relevance=0.5,
-                        days_back=days_back
+                        days_back=days_back,
+                        force_refresh=force_refresh
                     )
             
             # Save search results to cache for future use (4-day cache)
@@ -971,7 +1143,44 @@ def run(run_id: str = None, count: int = None, episode_id: str = None, manual_tr
     
     # Now process tweet_dicts (from either path)
     if 'tweet_dicts' in locals() and tweet_dicts:
-        
+
+        # CRITICAL FIX: Filter out tweets that already exist in database
+        # This prevents re-scraping the same tweets and wasting API quota
+        if episode_id:
+            existing_ids = get_existing_tweet_ids_from_db(episode_id)
+            if existing_ids:
+                original_count = len(tweet_dicts)
+                tweet_dicts = [t for t in tweet_dicts if t.get('id') not in existing_ids]
+                filtered_count = original_count - len(tweet_dicts)
+
+                if filtered_count > 0:
+                    logger.info(
+                        f"🔍 Filtered out {filtered_count} tweets that already exist in database",
+                        original_count=original_count,
+                        existing_in_db=len(existing_ids),
+                        new_tweets=len(tweet_dicts),
+                        episode_id=episode_id
+                    )
+
+                    # If we don't have enough new tweets, log a warning
+                    if len(tweet_dicts) < count:
+                        shortage = count - len(tweet_dicts)
+                        logger.warning(
+                            f"⚠️  Only found {len(tweet_dicts)} new tweets (requested {count}, short by {shortage}). "
+                            f"Filtered out {filtered_count} existing tweets. "
+                            "Consider running scraping again with different keywords, longer time range, or force_refresh=True."
+                        )
+                else:
+                    logger.info(
+                        f"✅ All {original_count} scraped tweets are new (not in database)",
+                        episode_id=episode_id
+                    )
+            else:
+                logger.info(
+                    f"✅ No existing tweets in database for episode {episode_id}, all scraped tweets are new",
+                    tweet_count=len(tweet_dicts)
+                )
+
         # Add metadata about the search
         api_credits_total = sum(t.get('api_credits_used', 1) for t in tweet_dicts)
         tweets_metadata = {

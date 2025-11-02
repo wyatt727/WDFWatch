@@ -189,7 +189,7 @@ def reply_safe_tweet(tweet_id, message):
 
     # Use known values for WDFwatch account
     username = "wdfwatch"
-    user_id = "1768756633519427584"  # WDFwatch account ID
+    user_id = "1946275726954532864"  # WDFwatch account ID (verified correct)
     
     # CRITICAL: Ensure it's WDFwatch
     logger.info("=" * 60)

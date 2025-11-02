@@ -160,6 +160,7 @@ export default function TweetQueuePage() {
   const { data: queueData, isLoading, refetch } = useQuery({
     queryKey: ['tweet-queue', statusFilter, episodeFilter, showOrphaned],
     queryFn: async () => {
+      console.log('[QUEUE UI] Fetching queue data...')
       const params = new URLSearchParams({
         status: statusFilter,
         includeOrphaned: showOrphaned.toString(),
@@ -168,10 +169,22 @@ export default function TweetQueuePage() {
       if (episodeFilter !== 'all') {
         params.append('episodeId', episodeFilter)
       }
-      
+
       const response = await fetch(`/api/tweet-queue?${params}`)
-      if (!response.ok) throw new Error('Failed to fetch queue')
-      return response.json()
+      console.log('[QUEUE UI] Queue fetch response:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[QUEUE UI] ❌ Failed to fetch queue:', errorText)
+        throw new Error('Failed to fetch queue')
+      }
+
+      const data = await response.json()
+      console.log('[QUEUE UI] Queue data received:', {
+        itemCount: data.items?.length || 0,
+        stats: data.stats
+      })
+      return data
     },
     refetchInterval: 30000 // Refresh every 30 seconds
   })
@@ -189,20 +202,38 @@ export default function TweetQueuePage() {
   // Update queue items mutation
   const updateQueueMutation = useMutation({
     mutationFn: async ({ queueIds, updates }: { queueIds: string[], updates: any }) => {
+      console.log('[QUEUE UI] Updating queue items:', {
+        queueIds,
+        updates,
+        count: queueIds.length
+      })
+
       const response = await fetch('/api/tweet-queue', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ queueIds, updates })
       })
-      if (!response.ok) throw new Error('Failed to update queue')
-      return response.json()
+
+      console.log('[QUEUE UI] Update response:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[QUEUE UI] ❌ Failed to update queue:', errorText)
+        throw new Error('Failed to update queue')
+      }
+
+      const result = await response.json()
+      console.log('[QUEUE UI] ✅ Queue update successful:', result)
+      return result
     },
     onSuccess: () => {
+      console.log('[QUEUE UI] Queue update success, invalidating queries')
       queryClient.invalidateQueries({ queryKey: ['tweet-queue'] })
       toast({ title: 'Queue updated successfully' })
       setSelectedItems(new Set())
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('[QUEUE UI] Queue update error:', error)
       toast({ title: 'Failed to update queue', variant: 'destructive' })
     }
   })
@@ -210,19 +241,139 @@ export default function TweetQueuePage() {
   // Process queue mutation - process ALL pending tweets
   const processQueueMutation = useMutation({
     mutationFn: async (batchSize: number = 1000) => {  // Process up to 1000 tweets (effectively all)
-      const response = await fetch('/api/tweet-queue/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchSize })
+      console.log('\n\n🚀🚀🚀 ==================== PROCESS QUEUE START ==================== 🚀🚀🚀')
+      console.log('🔑 OAUTH TOKEN REFRESH IN PROGRESS...')
+      console.log('⚠️  IMPORTANT: Tokens are ALWAYS refreshed when Process Queue is clicked!')
+      console.log('⚠️  This ensures fresh authentication for Twitter API calls')
+      console.log('📊 Current queue stats:', queueData?.stats)
+      console.log('⏰ Timestamp:', new Date().toISOString())
+      console.log('================================================================\n')
+
+      try {
+        console.log('[QUEUE UI] Sending POST to /api/tweet-queue/process')
+        console.log('[QUEUE UI] Request body:', { batchSize })
+
+        // Add 35-minute timeout for queue processing (backend max is 30 min + 5 min buffer)
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => {
+          console.error('[QUEUE UI] ❌ REQUEST TIMEOUT: Aborting after 35 minutes')
+          controller.abort()
+        }, 35 * 60 * 1000) // 35 minutes in milliseconds
+
+        const response = await fetch('/api/tweet-queue/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batchSize }),
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+        console.log('[QUEUE UI] Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('[QUEUE UI] ❌ Response not OK:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          })
+          throw new Error(`Failed to start processing: ${response.status} ${errorText}`)
+        }
+
+        const result = await response.json()
+        console.log('[QUEUE UI] ✅ Process queue response:', result)
+
+        // Log token refresh status VERY PROMINENTLY
+        console.log('\n\n============================================================')
+        console.log('🔑🔑🔑 TOKEN REFRESH STATUS 🔑🔑🔑')
+        console.log('============================================================')
+        if (result.tokenRefreshed) {
+          console.log('✅ SUCCESS: OAUTH TOKENS HAVE BEEN REFRESHED!')
+          console.log('✅ New access token acquired from Twitter/X')
+          console.log('✅ Token is valid for the next 2 hours')
+          console.log('✅ All tweets will be posted with fresh credentials')
+        } else {
+          console.log('⚠️  WARNING: Token refresh status not confirmed')
+          console.log('⚠️  Server may not have reported refresh status')
+        }
+        console.log('============================================================\n\n')
+
+        console.log('[QUEUE UI] Results:', {
+          processed: result.processed,
+          successful: result.successful,
+          failed: result.failed,
+          remaining: result.remaining,
+          stoppedEarly: result.stoppedEarly,
+          tokenRefreshed: result.tokenRefreshed,
+          message: result.message
+        })
+
+        // Log individual tweet results
+        if (result.results && result.results.length > 0) {
+          console.log('[QUEUE UI] \n========== INDIVIDUAL TWEET RESULTS ==========')
+          result.results.forEach((tweet: any, idx: number) => {
+            const icon = tweet.status === 'completed' ? '✅' : '❌'
+            console.log(`[QUEUE UI] ${icon} Tweet ${idx + 1}/${result.results.length}:`)
+            console.log(`[QUEUE UI]    Tweet ID: ${tweet.tweetId}`)
+            console.log(`[QUEUE UI]    Status Code: ${tweet.statusCode}`)
+            console.log(`[QUEUE UI]    Result: ${tweet.status.toUpperCase()}`)
+            if (tweet.error) {
+              console.log(`[QUEUE UI]    Error: ${tweet.error}`)
+            }
+            if (tweet.message) {
+              console.log(`[QUEUE UI]    Message: ${tweet.message}`)
+            }
+          })
+          console.log('[QUEUE UI] ==============================================\n')
+
+          // Summary by status code
+          const statusCodes = result.results.reduce((acc: any, tweet: any) => {
+            acc[tweet.statusCode] = (acc[tweet.statusCode] || 0) + 1
+            return acc
+          }, {})
+          console.log('[QUEUE UI] Status Code Summary:')
+          Object.entries(statusCodes).forEach(([code, count]) => {
+            console.log(`[QUEUE UI]    ${code}: ${count} tweet(s)`)
+          })
+        }
+
+        console.log('==================== QUEUE UI: PROCESS QUEUE SUCCESS ====================')
+        return result
+      } catch (error: any) {
+        console.error('==================== QUEUE UI: PROCESS QUEUE ERROR ====================')
+        console.error('[QUEUE UI] ❌ Error type:', error?.constructor?.name)
+        console.error('[QUEUE UI] ❌ Error message:', error?.message)
+        console.error('[QUEUE UI] ❌ Error stack:', error?.stack)
+
+        if (error.name === 'AbortError') {
+          console.error('[QUEUE UI] ❌ Request was aborted due to timeout')
+        }
+
+        console.error('[QUEUE UI] Full error:', error)
+        console.error('==================== QUEUE UI: PROCESS QUEUE FAILED ====================')
+        throw error
+      }
+    },
+    onSuccess: (data) => {
+      console.log('[QUEUE UI] onSuccess callback triggered')
+      console.log('[QUEUE UI] Success data:', data)
+      toast({
+        title: `Processing completed`,
+        description: `Processed ${data?.processed || 0} tweets. ${data?.successful || 0} successful, ${data?.failed || 0} failed.`
       })
-      if (!response.ok) throw new Error('Failed to start processing')
-      return response.json()
     },
-    onSuccess: () => {
-      toast({ title: 'Processing started' })
-    },
-    onError: () => {
-      toast({ title: 'Failed to start processing', variant: 'destructive' })
+    onError: (error: any) => {
+      console.error('[QUEUE UI] onError callback triggered')
+      console.error('[QUEUE UI] Error in callback:', error)
+      toast({
+        title: 'Failed to start processing',
+        description: error?.message || 'Unknown error occurred',
+        variant: 'destructive'
+      })
     }
   })
 
@@ -336,17 +487,17 @@ export default function TweetQueuePage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-full overflow-x-hidden">
         {/* Header with stats */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">Tweet Queue</h1>
               <p className="text-muted-foreground">
                 Manage and monitor tweet processing pipeline
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge className={cn('px-3 py-1', healthColors[queueHealth])}>
                 {queueHealth === 'healthy' && <CheckCircle className="w-3 h-3 mr-1" />}
                 {queueHealth === 'busy' && <Clock className="w-3 h-3 mr-1" />}
@@ -362,17 +513,51 @@ export default function TweetQueuePage() {
                 Refresh
               </Button>
               <Button
-                onClick={() => processQueueMutation.mutate(1000)}  // Process all tweets
+                onClick={() => {
+                  const failedItems = queueData?.items?.filter(item => item.status === 'failed') || []
+                  if (failedItems.length === 0) {
+                    toast({ title: 'No failed tweets to retry' })
+                    return
+                  }
+                  const failedIds = failedItems.map(item => item.tweetId)
+                  updateQueueMutation.mutate({
+                    queueIds: failedIds,
+                    updates: { status: 'pending', retryCount: 0 }
+                  })
+                }}
+                variant="outline"
+                size="sm"
+                disabled={updateQueueMutation.isPending || (queueData?.stats?.failed?.count || 0) === 0}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry Failed ({queueData?.stats?.failed?.count || 0})
+              </Button>
+              <Button
+                onClick={() => {
+                  console.log('\n🔘🔘🔘 PROCESS QUEUE BUTTON CLICKED 🔘🔘🔘')
+                  console.log('🔑 INITIATING OAUTH TOKEN REFRESH...')
+                  console.log('📊 Queue contains:', {
+                    pendingTweets: queueData?.stats?.pending?.count || 0,
+                    processingTweets: queueData?.stats?.processing?.count || 0,
+                    totalInQueue: queueData?.items?.length || 0
+                  })
+                  if (processQueueMutation.isPending) {
+                    console.warn('[QUEUE UI] ⚠️ Already processing!')
+                  } else {
+                    console.log('🚀 Starting queue processing (tokens will be refreshed first!)')
+                    processQueueMutation.mutate(1000)
+                  }
+                }}  // Process all tweets
                 disabled={processQueueMutation.isPending}
               >
                 <Play className="w-4 h-4 mr-2" />
-                Process Queue
+                {processQueueMutation.isPending ? 'Processing...' : 'Process Queue'}
               </Button>
             </div>
           </div>
 
           {/* Statistics Cards */}
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {Object.entries(statusConfig).map(([status, config]) => {
               const stats = queueData?.stats?.[status] || { count: 0, avgPriority: 0 }
               return (
@@ -401,8 +586,8 @@ export default function TweetQueuePage() {
           <CardContent className="p-4">
             <div className="flex flex-col gap-4">
               {/* Search and filters */}
-              <div className="flex items-center gap-4">
-                <div className="relative flex-1 max-w-sm">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
                     placeholder="Search tweets..."
@@ -411,9 +596,9 @@ export default function TweetQueuePage() {
                     className="pl-9"
                   />
                 </div>
-                
+
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[150px]">
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -430,7 +615,7 @@ export default function TweetQueuePage() {
                 </Select>
 
                 <Select value={episodeFilter} onValueChange={setEpisodeFilter}>
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-full sm:w-[200px]">
                     <SelectValue placeholder="Episode" />
                   </SelectTrigger>
                   <SelectContent>
@@ -443,7 +628,7 @@ export default function TweetQueuePage() {
                   </SelectContent>
                 </Select>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 whitespace-nowrap">
                   <Checkbox
                     id="orphaned"
                     checked={showOrphaned}
@@ -458,7 +643,7 @@ export default function TweetQueuePage() {
                 </div>
 
                 <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-                  <SelectTrigger className="w-[150px]">
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -571,7 +756,7 @@ export default function TweetQueuePage() {
         </Card>
 
         {/* Queue Items */}
-        <Card>
+        <Card className="overflow-x-hidden">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -597,6 +782,7 @@ export default function TweetQueuePage() {
               </div>
             ) : (
               <div className={cn(
+                'overflow-x-hidden',
                 viewMode === 'grid' ? 'grid grid-cols-2 gap-4 p-4' : 'divide-y'
               )}>
                 <AnimatePresence>
@@ -690,20 +876,20 @@ function QueueItemCard({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className={cn(
-        "px-4 py-3 hover:bg-accent/50 transition-colors",
+        "px-4 py-3 hover:bg-accent/50 transition-colors w-full",
         isSelected && "bg-accent"
       )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4 w-full overflow-hidden">
         <Checkbox
           checked={isSelected}
           onCheckedChange={onToggleSelected}
           onClick={(e) => e.stopPropagation()}
         />
-        
+
         <button
           onClick={onToggleExpanded}
-          className="p-1 hover:bg-muted rounded"
+          className="p-1 hover:bg-muted rounded shrink-0"
         >
           {isExpanded ? (
             <ChevronDown className="w-4 h-4" />
@@ -711,31 +897,31 @@ function QueueItemCard({
             <ChevronRight className="w-4 h-4" />
           )}
         </button>
-        
-        <div className="flex items-center gap-2">
+
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
           <StatusIcon className="w-4 h-4" />
           <Badge variant="outline" className="text-xs">
             {statusInfo.label}
           </Badge>
         </div>
-        
-        <Badge className={cn('text-xs', getPriorityColor(item.priority))}>
-          Priority {item.priority}
+
+        <Badge className={cn('text-xs shrink-0 hidden md:inline-flex', getPriorityColor(item.priority))}>
+          P{item.priority}
         </Badge>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{item.authorHandle?.startsWith('@') ? item.authorHandle : `@${item.authorHandle || ''}`}</span>
+
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <span className="font-medium truncate">{item.authorHandle?.startsWith('@') ? item.authorHandle : `@${item.authorHandle || ''}`}</span>
             {item.authorName && (
-              <span className="text-sm text-muted-foreground">({item.authorName})</span>
+              <span className="text-sm text-muted-foreground truncate hidden lg:inline">({item.authorName})</span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground truncate">
+          <p className="text-sm text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
             {item.tweetText}
           </p>
         </div>
-        
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+
+        <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground shrink-0">
           <Tooltip>
             <TooltipTrigger>
               <Badge variant="outline" className="text-xs">
@@ -747,7 +933,7 @@ function QueueItemCard({
               {item.addedBy && <p>Added by: {item.addedBy}</p>}
             </TooltipContent>
           </Tooltip>
-          
+
           {item.episodeTitle ? (
             <Tooltip>
               <TooltipTrigger>
@@ -764,15 +950,15 @@ function QueueItemCard({
               Orphaned
             </Badge>
           )}
-          
-          <span className="text-xs">
-            {formatDistanceToNow(new Date(item.addedAt), { addSuffix: true })}
-          </span>
         </div>
-        
+
+        <span className="text-xs text-muted-foreground hidden md:inline shrink-0">
+          {formatDistanceToNow(new Date(item.addedAt), { addSuffix: true })}
+        </span>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" className="shrink-0">
               <MoreVertical className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
