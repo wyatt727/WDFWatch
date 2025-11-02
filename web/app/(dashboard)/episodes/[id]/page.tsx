@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { PipelineVisualizer } from '@/components/pipeline/PipelineVisualizer'
+import { KeywordsEditor } from '@/components/episodes/KeywordsEditor'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
       uploadedAt: true,
       videoUrl: true,
       pipelineType: true,
+      pipelineConfiguration: true,
       keywords_entries: {
         where: { enabled: true },
         select: {
@@ -44,8 +46,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
         orderBy: [
           { weight: 'desc' },
           { keyword: 'asc' }
-        ],
-        take: 10
+        ]
       },
       _count: {
         select: {
@@ -102,17 +103,11 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
             <CardTitle className="text-base">Keywords</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{episode._count.keywords_entries}</p>
-            <p className="text-xs text-muted-foreground mb-2">Search terms</p>
-            {episode.keywords_entries.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {episode.keywords_entries.map((kw) => (
-                  <Badge key={kw.keyword} variant="outline" className="text-xs">
-                    {kw.keyword}
-                  </Badge>
-                ))}
-              </div>
-            )}
+            <KeywordsEditor
+              episodeId={episode.id}
+              initialKeywords={episode.keywords_entries}
+              episodeType={(episode.pipelineConfiguration as any)?.metadata?.episodeType}
+            />
           </CardContent>
         </Card>
         
