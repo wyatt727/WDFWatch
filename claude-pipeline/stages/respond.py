@@ -123,6 +123,7 @@ CRITICAL RULES:
 - NEVER use emojis
 - NEVER explain what you're doing
 - Include the URL/handle naturally
+- Connect the tweet to either the specific episode themes (if available) OR the general themes of the WDF Podcast
 
 TWEET TO RESPOND TO:
 {tweet_text}
@@ -235,6 +236,7 @@ CRITICAL RULES:
 - NEVER explain what you're doing
 - Include the provided URL/handle in each response
 - For multiple tweets, separate responses with ---
+- Connect each tweet to either the specific episode themes (if available) OR the general themes of the WDF Podcast
 
 URL/HANDLE TO INCLUDE: {video_url}
 

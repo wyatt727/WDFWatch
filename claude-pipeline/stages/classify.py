@@ -164,7 +164,7 @@ class Classifier:
         # Set episode context
         self.claude.set_episode_context(episode_id)
         
-        prompt = f"""Score this tweet's relevance from 0.00 to 1.00 based on episode themes.
+        prompt = f"""Score this tweet's relevance from 0.00 to 1.00 based on episode themes (if available) or general WDF Podcast themes.
 Output only the numerical score.
 
 TWEET:

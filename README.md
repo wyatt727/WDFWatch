@@ -96,6 +96,7 @@ make bootstrap  # Installs all dependencies
 ```bash
 cp .env.example .env
 # Edit .env with your settings
+# See ENV_SETUP.md or QUICKSTART.md for detailed setup instructions
 ```
 
 3. **Start Services**
@@ -126,28 +127,6 @@ The modern web interface provides:
 - **Review Interface**: Approve/edit/reject AI responses
 - **Analytics**: Track performance metrics and API usage
 - **Settings**: Configure API keys, models, and scraping parameters
-
-### CLI Mode (Legacy)
-
-For automation and scripting:
-```bash
-# Full pipeline run
-python main.py
-
-# Episode-based pipeline run
-python main.py --episode-id 123
-
-# Individual tasks
-python src/wdf/tasks/scrape.py --run-id=test-123 --episode-id 123
-python src/wdf/tasks/classify.py --run-id=test-123 --episode-id 123
-python src/wdf/tasks/deepseek.py --run-id=test-123 --episode-id 123
-
-# With specific options
-python main.py --debug --workers 4 --non-interactive --episode-id 123
-
-# Migrate legacy files to episode structure
-python scripts/migrate_episodes.py --episode-id 123
-```
 
 ## 🔧 Configuration
 

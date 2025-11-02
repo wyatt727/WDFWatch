@@ -35,7 +35,6 @@ import { useToast } from "@/hooks/use-toast"
 
 interface UnifiedPipelineControllerProps {
   episodeId: number
-  pipelineType: 'claude' | 'legacy'
   initialStatus?: any
 }
 
@@ -48,125 +47,56 @@ interface PipelineState {
   canStart: boolean
 }
 
-// Define stage configurations for different pipeline types
-const STAGE_DEFINITIONS = {
-  claude: [
-    {
-      id: 'validation',
-      name: 'Pre-flight Validation',
-      description: 'Validate all requirements and configuration',
-      icon: Settings,
-      estimatedDuration: 1,
-      dependencies: [],
-      category: 'preparation' as const,
-    },
-    {
-      id: 'summarization',
-      name: 'Episode Summarization',
-      description: 'Generate episode summary and extract insights using Claude',
-      icon: Activity,
-      estimatedDuration: 3,
-      dependencies: ['validation'],
-      category: 'processing' as const,
-    },
-    {
-      id: 'classification',
-      name: 'Tweet Classification',
-      description: 'Classify tweets for relevance using Claude',
-      icon: CheckCircle2,
-      estimatedDuration: 5,
-      dependencies: ['summarization'],
-      category: 'processing' as const,
-    },
-    {
-      id: 'response',
-      name: 'Response Generation',
-      description: 'Generate thoughtful responses using Claude',
-      icon: Activity,
-      estimatedDuration: 8,
-      dependencies: ['classification'],
-      category: 'generation' as const,
-    },
-    {
-      id: 'moderation',
-      name: 'Human Review',
-      description: 'Review and approve generated responses',
-      icon: CheckCircle2,
-      estimatedDuration: 0,
-      dependencies: ['response'],
-      category: 'review' as const,
-    },
-  ],
-  legacy: [
-    {
-      id: 'validation',
-      name: 'Pre-flight Validation',
-      description: 'Validate all requirements and configuration',
-      icon: Settings,
-      estimatedDuration: 1,
-      dependencies: [],
-      category: 'preparation' as const,
-    },
-    {
-      id: 'summarization',
-      name: 'Transcript Analysis',
-      description: 'Analyze transcript and extract keywords using Gemini',
-      icon: Activity,
-      estimatedDuration: 2,
-      dependencies: ['validation'],
-      category: 'processing' as const,
-    },
-    {
-      id: 'fewshot',
-      name: 'Few-shot Generation',
-      description: 'Generate classification examples for training',
-      icon: Activity,
-      estimatedDuration: 2,
-      dependencies: ['summarization'],
-      category: 'preparation' as const,
-    },
-    {
-      id: 'scraping',
-      name: 'Tweet Collection',
-      description: 'Discover relevant tweets from Twitter',
-      icon: Activity,
-      estimatedDuration: 1,
-      dependencies: ['fewshot'],
-      category: 'processing' as const,
-    },
-    {
-      id: 'classification',
-      name: 'Tweet Classification',
-      description: 'Classify tweets using local models',
-      icon: CheckCircle2,
-      estimatedDuration: 3,
-      dependencies: ['scraping'],
-      category: 'processing' as const,
-    },
-    {
-      id: 'response',
-      name: 'Response Generation',
-      description: 'Generate responses using DeepSeek',
-      icon: Activity,
-      estimatedDuration: 6,
-      dependencies: ['classification'],
-      category: 'generation' as const,
-    },
-    {
-      id: 'moderation',
-      name: 'Human Review',
-      description: 'Review and approve generated responses',
-      icon: CheckCircle2,
-      estimatedDuration: 0,
-      dependencies: ['response'],
-      category: 'review' as const,
-    },
-  ],
-}
+const CLAUDE_STAGE_DEFINITIONS = [
+  {
+    id: 'validation',
+    name: 'Pre-flight Validation',
+    description: 'Validate all requirements and configuration',
+    icon: Settings,
+    estimatedDuration: 1,
+    dependencies: [],
+    category: 'preparation' as const,
+  },
+  {
+    id: 'summarization',
+    name: 'Episode Summarization',
+    description: 'Generate episode summary and extract insights using Claude',
+    icon: Activity,
+    estimatedDuration: 3,
+    dependencies: ['validation'],
+    category: 'processing' as const,
+  },
+  {
+    id: 'classification',
+    name: 'Tweet Classification',
+    description: 'Classify tweets for relevance using Claude',
+    icon: CheckCircle2,
+    estimatedDuration: 5,
+    dependencies: ['summarization'],
+    category: 'processing' as const,
+  },
+  {
+    id: 'response',
+    name: 'Response Generation',
+    description: 'Generate thoughtful responses using Claude',
+    icon: Activity,
+    estimatedDuration: 8,
+    dependencies: ['classification'],
+    category: 'generation' as const,
+  },
+  {
+    id: 'moderation',
+    name: 'Human Review',
+    description: 'Review and approve generated responses',
+    icon: CheckCircle2,
+    estimatedDuration: 0,
+    dependencies: ['response'],
+    category: 'review' as const,
+  },
+]
 
 export function UnifiedPipelineController({
   episodeId,
-  pipelineType,
   initialStatus,
 }: UnifiedPipelineControllerProps) {
   const [state, setState] = useState<PipelineState>({
@@ -177,8 +107,7 @@ export function UnifiedPipelineController({
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
-  // Get stage definitions for pipeline type
-  const stages = STAGE_DEFINITIONS[pipelineType]
+  const stages = CLAUDE_STAGE_DEFINITIONS
 
   // Load initial status
   useEffect(() => {
@@ -413,7 +342,7 @@ export function UnifiedPipelineController({
               <statusIndicator.icon className={`w-6 h-6 ${statusIndicator.color}`} />
               <div>
                 <CardTitle className="text-lg">
-                  {pipelineType === 'claude' ? 'Claude' : 'Legacy'} Pipeline
+                  Claude Pipeline
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Episode {episodeId} • {statusIndicator.label}
@@ -535,7 +464,6 @@ export function UnifiedPipelineController({
         <TabsContent value="pipeline">
           <PipelineFlowDiagram
             episodeId={episodeId}
-            pipelineType={pipelineType}
             stages={stages}
             progress={state.progress}
             onStageAction={handleStageAction}

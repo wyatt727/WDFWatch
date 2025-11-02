@@ -25,10 +25,13 @@ venv/
 env/
 ENV/
 .env
-.env*
 .env.local
 .env.production
 .env.development
+.env.wdfwatch
+# Allow .example files to be committed as templates
+!.env*.example
+!.env.example
 
 # API Keys and Secrets
 *.key

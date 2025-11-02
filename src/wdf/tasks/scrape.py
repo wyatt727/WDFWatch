@@ -33,7 +33,7 @@ if main_env_path.exists():
 from ..settings import settings
 from ..twitter_client import Tweet, get_twitter_client
 from ..tweet_cache import get_tweet_cache
-from ..episode_files import get_episode_file_manager
+from backend.api.app.services.episodes_repo import get_episode_file_manager
 
 # Import web bridge for database sync
 try:

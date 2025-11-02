@@ -1029,7 +1029,7 @@ def load_episode_config(episode_id: Union[int, str]) -> Optional[Dict]:
                 'episode_id': episode['id'],
                 'episode_dir': episode.get('episode_dir'),
                 'claude_episode_dir': episode.get('claude_episode_dir'),
-                'pipeline_type': episode.get('pipeline_type', 'legacy'),
+                'pipeline_type': episode.get('pipeline_type', 'claude') or 'claude',
                 'claude_status': episode.get('claude_pipeline_status'),
                 'transcript': episode.get('transcript_text'),
                 'summary': episode.get('summary_text'),

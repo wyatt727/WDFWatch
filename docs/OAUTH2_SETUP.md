@@ -34,12 +34,15 @@ WDFWatch now uses modern **OAuth 2.0 with PKCE** (Proof Key for Code Exchange) f
 
 ### Step 2: Set Environment Variables
 
-Add to your `.env` file:
+Add to your `.env` file (in the project root):
 ```bash
 # OAuth 2.0 Configuration
-TWITTER_CLIENT_ID=your_client_id_here
-TWITTER_REDIRECT_URI=http://localhost:8080/callback
+CLIENT_ID=your_client_id_here
+CLIENT_SECRET=your_client_secret_here
+# Note: Redirect URI is configured in the script, not needed in .env
 ```
+
+**Note**: See `ENV_SETUP.md` for complete environment variable documentation. The `.env` file should be in the project root directory.
 
 ### Step 3: Authorize the Bot
 
@@ -51,7 +54,7 @@ python scripts/setup_oauth2.py
 This will:
 1. Start a local server on port 8080
 2. Open your browser to Twitter's authorization page
-3. After you authorize, save tokens to `.twitter_tokens.json`
+3. After you authorize, save tokens to `.env.wdfwatch` (and optionally `.env`)
 4. Test the authentication with a simple API call
 
 ### Step 4: Verify Setup
@@ -134,11 +137,12 @@ response = oauth.make_authenticated_request(
 
 ## 🛡️ Security Best Practices
 
-1. **Token Storage**: Tokens are saved to `.twitter_tokens.json` with 600 permissions (owner-only)
-2. **Never Commit Tokens**: Add `.twitter_tokens.json` to `.gitignore`
-3. **Client ID Only**: Never share or commit your Client Secret (if using confidential client)
+1. **Token Storage**: Tokens are saved to `.env.wdfwatch` (and optionally `.env`) - both files are in `.gitignore`
+2. **Never Commit Tokens**: All `.env*` files are automatically ignored by git (except `.env*.example` templates)
+3. **Client Secret**: Store `CLIENT_SECRET` in `.env` - it's needed for token refresh but is gitignored
 4. **HTTPS in Production**: Use HTTPS redirect URIs in production
-5. **Rotate Regularly**: Periodically revoke and regenerate tokens
+5. **Rotate Regularly**: Periodically revoke and regenerate tokens using `python scripts/generate_wdfwatch_tokens.py`
+6. **Separate Files**: Consider using `.env.wdfwatch` for extra safety (separates automated account tokens from managing account credentials)
 
 ## 🚨 Troubleshooting
 
@@ -173,9 +177,11 @@ TWITTER_ACCESS_TOKEN_SECRET=xxx
 
 ### New (OAuth 2.0) - CURRENT
 ```python
-# Only need Client ID + one-time authorization
-TWITTER_CLIENT_ID=xxx
-# Tokens stored in .twitter_tokens.json
+# Need Client ID and Secret for token refresh
+CLIENT_ID=xxx
+CLIENT_SECRET=xxx
+# Tokens stored in .env.wdfwatch (and optionally .env)
+# See ENV_SETUP.md for complete setup
 ```
 
 ### Benefits of Migration

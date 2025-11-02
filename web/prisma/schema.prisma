@@ -24,7 +24,7 @@ model PodcastEpisode {
   claudeEpisodeDir           String?                      @map("claude_episode_dir") @db.VarChar(255)
   claudeContextGenerated     Boolean                      @default(false) @map("claude_context_generated")
   claudePipelineStatus       String?                      @map("claude_pipeline_status") @db.VarChar(50)
-  pipelineType               String                       @default("legacy") @map("pipeline_type") @db.VarChar(20)
+  pipelineType               String                       @default("claude") @map("pipeline_type") @db.VarChar(20)
   lastValidationAt           DateTime?                    @map("last_validation_at")
   lastValidationScore        Int?                         @map("last_validation_score")
   pipelineConfiguration      Json                         @default("{}") @map("pipeline_configuration")

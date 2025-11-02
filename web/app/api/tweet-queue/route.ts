@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { getCurrentUserId } from '@/lib/auth'
-import { emitEvent } from '@/lib/sse-events'
+import { apiClient } from '@/lib/api-client'
 
 // Queue status enum
 export enum QueueStatus {
@@ -242,14 +242,11 @@ export async function POST(request: NextRequest) {
 
     // Auto-process if requested
     if (validated.processingOptions?.autoProcess) {
-      // Trigger Python processor asynchronously
       setTimeout(async () => {
-        const { exec } = await import('child_process')
-        const { promisify } = await import('util')
-        const execAsync = promisify(exec)
-        
         try {
-          await execAsync(`python -m src.wdf.tasks.queue_processor --batch-size ${validated.processingOptions?.batchSize}`)
+          await apiClient.processQueue({
+            batch_size: validated.processingOptions?.batchSize || 10
+          })
         } catch (error) {
           console.error('Failed to trigger queue processor:', error)
         }

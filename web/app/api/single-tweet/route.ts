@@ -18,11 +18,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { getCurrentUserId } from '@/lib/auth'
-import { emitSSEEvent } from '@/lib/sse-events'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
+import { apiClient } from '@/lib/api-client'
 
 // Tweet URL parser
 const TWEET_URL_REGEX = /(?:twitter\.com|x\.com)\/(?:#!\/)?(\w+)\/status(?:es)?\/(\d+)/i
@@ -186,71 +182,58 @@ async function handleGenerate(request: NextRequest) {
       RETURNING id
     `
 
-    // Prepare generation parameters
-    const generationParams = {
-      tweet_url: validated.tweetUrl,
-      tweet_id: parsed.tweetId,
-      tweet_text: validated.tweetText,
-      episode_id: episodeContext?.id,
-      episode_title: episodeContext?.title,
-      episode_summary: episodeContext?.summaryData,
-      custom_context: validated.customContext,
-      model: validated.modelOverride || 'deepseek-r1:latest',
-      request_id: responseRequest
-    }
+    // Call FastAPI backend to generate response
+    let apiResponse: any = null
+    try {
+      apiResponse = await apiClient.generateSingleTweet({
+        tweet_text: validated.tweetText || '',
+        tweet_id: parsed.tweetId,
+        episode_id: episodeContext?.id?.toString() || null,
+        custom_context: validated.customContext || null,
+        video_url: episodeContext?.videoUrl || null,
+      })
 
-    // Call Python script to generate response
-    const command = `python -m src.wdf.tasks.single_tweet_response --params '${JSON.stringify(generationParams)}'`
-    
-    // Start generation asynchronously
-    exec(command, async (error, stdout, stderr) => {
-      if (error) {
-        console.error('Response generation error:', error)
-        console.error('stderr:', stderr)
-        
-        // Update request status to failed
+      if (apiResponse.success && apiResponse.response) {
+        // Update request with generated response
         await prisma.$executeRaw`
           UPDATE tweet_response_requests
-          SET status = 'failed', error_message = ${error.message}
+          SET 
+            response_generated = ${apiResponse.response},
+            status = 'generated'
           WHERE id = ${responseRequest}
         `
         
-        // Emit failure event
-        emitSSEEvent({
-          type: 'single_tweet_response_failed',
-          data: {
-            requestId: responseRequest,
-            error: error.message
-          }
-        })
       } else {
-        try {
-          // Parse response from stdout
-          const response = JSON.parse(stdout)
-          
-          // Update request with generated response
-          await prisma.$executeRaw`
-            UPDATE tweet_response_requests
-            SET 
-              response_generated = ${response.text},
-              status = 'generated'
-            WHERE id = ${responseRequest}
-          `
-          
-          // Emit success event
-          emitSSEEvent({
-            type: 'single_tweet_response_generated',
-            data: {
-              requestId: responseRequest,
-              response: response.text,
-              characterCount: response.text.length
-            }
-          })
-        } catch (parseError) {
-          console.error('Failed to parse response:', parseError)
-        }
+        // Update request status to failed
+        await prisma.$executeRaw`
+          UPDATE tweet_response_requests
+          SET status = 'failed', error_message = ${apiResponse.error || 'Unknown error'}
+          WHERE id = ${responseRequest}
+        `
+        
       }
-    })
+    } catch (apiError: any) {
+      console.error('Response generation error:', apiError)
+      
+      // Update request status to failed
+      await prisma.$executeRaw`
+        UPDATE tweet_response_requests
+        SET status = 'failed', error_message = ${apiError.message || 'API request failed'}
+        WHERE id = ${responseRequest}
+      `
+      
+      // Return error response
+      return NextResponse.json({
+        message: 'Response generation failed',
+        requestId: responseRequest,
+        success: false,
+        error: apiError.message || 'API request failed',
+        episodeContext: episodeContext ? {
+          id: episodeContext.id,
+          title: episodeContext.title
+        } : null
+      }, { status: 500 })
+    }
 
     // Create audit log
     await prisma.auditLog.create({
@@ -267,15 +250,19 @@ async function handleGenerate(request: NextRequest) {
       }
     })
 
+    // Return success response
     return NextResponse.json({
-      message: 'Response generation started',
+      message: apiResponse?.success ? 'Response generated successfully' : 'Response generation failed',
       requestId: responseRequest,
-      estimatedTime: '10-30 seconds',
+      success: apiResponse?.success || false,
+      response: apiResponse?.response || null,
+      characterCount: apiResponse?.character_count || null,
+      error: apiResponse?.error || null,
       episodeContext: episodeContext ? {
         id: episodeContext.id,
         title: episodeContext.title
       } : null
-    }, { status: 202 })
+    }, { status: apiResponse?.success ? 200 : 500 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

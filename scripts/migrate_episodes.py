@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.wdf.episode_files import EpisodeFileManager, EPISODES_BASE_DIR
+from src.wdf.episode_files import EpisodeFileManager
 from src.wdf.settings import get_settings
 
 

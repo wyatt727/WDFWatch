@@ -83,7 +83,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { useSSE } from '@/hooks/use-sse'
+import { useFastAPISSE } from '@/hooks/use-fastapi-sse'
 import { cn } from '@/lib/utils'
 
 // Types
@@ -147,13 +147,14 @@ export default function TweetQueuePage() {
   const [sortBy, setSortBy] = useState<'priority' | 'date'>('priority')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
   
-  // SSE for real-time updates
-  const sseEvents = useSSE('/api/events', {
+  // FastAPI SSE for real-time updates
+  useFastAPISSE({
+    path: '/events/queue',
     onMessage: (event) => {
-      if (event.type === 'tweet_queue_updated') {
+      if (event.type === 'queue.processed' || event.type === 'queue.skipped' || event.type === 'queue.failed') {
         queryClient.invalidateQueries({ queryKey: ['tweet-queue'] })
       }
-    }
+    },
   })
 
   // Fetch queue data

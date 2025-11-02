@@ -128,6 +128,8 @@ openssl rand -base64 32  # For NEXTAUTH_SECRET
 openssl rand -hex 16     # For database password
 
 # 3. Configure Twitter API credentials
+# Note: See ENV_SETUP.md for complete environment variable documentation
+# The .env file should be in the project root, not in backend/api/
 # Add your TWITTER_API_KEY, TWITTER_API_SECRET, etc.
 ```
 

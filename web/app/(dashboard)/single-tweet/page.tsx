@@ -78,7 +78,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { useSSE } from '@/hooks/use-sse'
 import { cn } from '@/lib/utils'
 
 // Types
@@ -165,25 +164,7 @@ export default function SingleTweetPage() {
                          charCount > 250 ? 'text-yellow-600' : 
                          'text-muted-foreground'
   
-  // SSE for real-time updates
-  const sseEvents = useSSE('/api/events', {
-    onMessage: (event) => {
-      if (event.type === 'single_tweet_response_generated' && event.data.requestId === currentRequestId) {
-        setResponseText(event.data.response)
-        queryClient.invalidateQueries({ queryKey: ['response-requests'] })
-        toast({
-          title: 'Response generated!',
-          description: `${event.data.characterCount} characters`
-        })
-      } else if (event.type === 'single_tweet_response_failed' && event.data.requestId === currentRequestId) {
-        toast({
-          title: 'Generation failed',
-          description: event.data.error,
-          variant: 'destructive'
-        })
-      }
-    }
-  })
+  // SSE removed: FastAPI endpoint returns synchronous response for single tweet generation.
 
   // Validate URL on change
   useEffect(() => {

@@ -1051,7 +1051,7 @@ def main():
     transcript_path = args.transcript
     if args.episode_id:
         # Check if episode directory exists and has a transcript
-        episode_dir = Path("episodes") / args.episode_id
+        episode_dir = Path(__file__).parent / "episodes" / args.episode_id
         episode_transcript = episode_dir / "transcript.txt"
         if episode_transcript.exists():
             transcript_path = str(episode_transcript)

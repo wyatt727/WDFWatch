@@ -98,7 +98,6 @@ export interface PipelineProgress {
 
 interface PipelineFlowDiagramProps {
   episodeId: number
-  pipelineType: 'claude' | 'legacy'
   stages: StageDefinition[]
   progress?: PipelineProgress
   onStageAction?: (stageId: string, action: 'start' | 'retry' | 'skip') => void
@@ -127,7 +126,6 @@ const STAGE_CATEGORIES = {
 
 export function PipelineFlowDiagram({
   episodeId,
-  pipelineType,
   stages,
   progress,
   onStageAction,
@@ -211,7 +209,7 @@ export function PipelineFlowDiagram({
             <div>
               <CardTitle className="text-lg">Pipeline Progress</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {pipelineType === 'claude' ? 'Claude' : 'Legacy'} Pipeline • Episode {episodeId}
+                Claude Pipeline • Episode {episodeId}
               </p>
             </div>
             {progress && (

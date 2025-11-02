@@ -5,7 +5,7 @@
  * Allows users to configure:
  * - Enable/disable individual stages (summarization, fewshot, classification, response, moderation)
  * - Stage-specific settings
- * - Pipeline type preferences (claude, legacy, hybrid)
+ * - Enforce Claude-only pipeline defaults
  * 
  * Related files:
  * - /web/lib/llm-models.ts (Stage configuration constants)
@@ -33,7 +33,7 @@ interface PipelineStagesConfig {
   classification: StageConfig
   response: StageConfig
   moderation: StageConfig
-  pipeline_type?: 'claude' | 'legacy' | 'hybrid' // Overall pipeline preference
+  pipeline_type: 'claude'
 }
 
 /**
@@ -62,9 +62,12 @@ export async function GET(request: NextRequest) {
         classification: DEFAULT_STAGE_CONFIG.classification,
         response: DEFAULT_STAGE_CONFIG.response,
         moderation: DEFAULT_STAGE_CONFIG.moderation,
-        pipeline_type: 'hybrid'
+        pipeline_type: 'claude'
       }
     }
+
+    // Force Claude-only pipeline regardless of stored value
+    stageConfig.pipeline_type = 'claude'
 
     return NextResponse.json({
       success: true,
@@ -161,7 +164,7 @@ export async function POST(request: NextRequest) {
       classification: DEFAULT_STAGE_CONFIG.classification,
       response: DEFAULT_STAGE_CONFIG.response,
       moderation: DEFAULT_STAGE_CONFIG.moderation,
-      pipeline_type: 'hybrid'
+      pipeline_type: 'claude'
     }
 
     await prisma.setting.upsert({
@@ -227,13 +230,13 @@ function validateStageConfig(config: any): { isValid: boolean; config?: Pipeline
   }
 
   // Validate pipeline type
-  if (config.pipeline_type && !['claude', 'legacy', 'hybrid'].includes(config.pipeline_type)) {
-    errors.push('Pipeline type must be one of: claude, legacy, hybrid')
+  if (config.pipeline_type && config.pipeline_type !== 'claude') {
+    errors.push('Pipeline type must be claude')
   }
 
-  // If using Claude pipeline, fewshot should be disabled
-  if (config.pipeline_type === 'claude' && config.fewshot?.enabled) {
-    errors.push('Few-shot generation is not needed with Claude pipeline')
+  // Few-shot stage is unsupported in the Claude pipeline
+  if (config.fewshot?.enabled) {
+    errors.push('Few-shot generation is not supported in the Claude pipeline')
   }
 
   if (errors.length > 0) {
@@ -248,7 +251,7 @@ function validateStageConfig(config: any): { isValid: boolean; config?: Pipeline
       model: config.summarization?.model
     },
     fewshot: {
-      enabled: config.fewshot?.enabled || false,
+      enabled: false,
       required: false,
       model: config.fewshot?.model
     },
@@ -272,7 +275,7 @@ function validateStageConfig(config: any): { isValid: boolean; config?: Pipeline
       required: false,
       model: config.moderation?.model
     },
-    pipeline_type: config.pipeline_type || 'hybrid'
+    pipeline_type: 'claude'
   }
 
   return { isValid: true, config: validatedConfig }

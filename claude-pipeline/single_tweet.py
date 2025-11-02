@@ -42,7 +42,7 @@ class ClaudeSingleTweetResponder:
             self.claude = ClaudeInterface()
         
         # Path to specialized CLAUDE.md for responses
-        self.responder_claude_md = Path(__file__).parent / "claude-tweet-responder" / "CLAUDE.md"
+        self.responder_claude_md = Path(__file__).parent / "specialized" / "responder" / "CLAUDE.md"
         
         # Ensure the specialized CLAUDE.md exists
         if not self.responder_claude_md.exists():
@@ -127,7 +127,7 @@ Generate a response following the guidelines in your context. Output ONLY the re
                 "character_count": len(response_text),
                 "tweet_id": tweet_id,
                 "episode_id": episode_id,
-                "context_type": "episode" if episode_context else "custom" if custom_context else "general",
+                "context_type": "episode" if episode_context_path else "custom" if custom_context else "general",
                 "tokens": {
                     "input": input_tokens,
                     "output": output_tokens

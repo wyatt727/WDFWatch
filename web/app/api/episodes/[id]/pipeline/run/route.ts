@@ -12,6 +12,8 @@ import { spawn, ChildProcess } from 'child_process';
 import { join } from 'path';
 import { processTracker } from '@/lib/process-tracker';
 import { ProcessTracker } from '@/lib/process-tracker';
+import { apiClient } from '@/lib/api-client';
+import { eventEmitter } from '@/lib/event-emitter';
 
 // Schema for stage execution request
 const legacyStageSchema = z.object({
@@ -181,39 +183,93 @@ export async function POST(
         },
       });
     } else if (isClaudePipeline) {
-      // Use Claude pipeline bridge - script path relative to project root after cwd change
-      const bridgePath = join('web', 'scripts', 'claude_pipeline_bridge.py');
+      // Use FastAPI backend for Claude pipeline stages
       const claudeStage = WEB_TO_CLAUDE_STAGE_MAP[stageId] || stageId;
       
-      // Pass the database episode ID for database lookups
-      // The bridge will get the episode directory name from the database
-      const args = [
-        bridgePath,
-        '--episode-id', episodeId.toString(),
-        '--stage', claudeStage
-      ];
-      if (force) args.push('--force');
+      // Map stage names to backend stage names
+      const backendStages: Record<string, string[]> = {
+        'summarize': ['summarize'],
+        'classify': ['classify'],
+        'respond': ['respond'],
+        'moderate': ['moderate'],
+        'full': ['summarize', 'classify', 'respond'],
+      };
       
-      // For full pipeline (which includes scraping), add manual_trigger flag
-      if (claudeStage === 'full') {
-        args.push('--manual-trigger');
-        console.log('Adding manual trigger flag for Claude pipeline full stage');
+      const stagesToRun = backendStages[claudeStage] || [claudeStage];
+      
+      try {
+        // Call FastAPI backend to run pipeline stages
+        const response = await apiClient.runPipeline(
+          episode.claudeEpisodeDir || episodeId.toString(),
+          {
+            stages: stagesToRun as any,
+            force: force || false,
+            skip_scraping: !forceRefresh, // If forceRefresh, don't skip scraping
+            skip_moderation: false,
+          }
+        );
+        
+        // Get job status for tracking
+        const jobStatus = await apiClient.getPipelineStatus(
+          episode.claudeEpisodeDir || episodeId.toString(),
+          response.job_id
+        );
+        
+        // Store job ID for tracking
+        await prisma.pipelineRun.update({
+          where: { id: (await prisma.pipelineRun.findFirst({ where: { runId } }))?.id || 0 },
+          data: {
+            metadata: {
+              ...((await prisma.pipelineRun.findFirst({ where: { runId } }))?.metadata as any || {}),
+              backendJobId: response.job_id,
+            },
+          },
+        });
+        
+        // Emit success event
+        await eventEmitter.broadcast({
+          type: 'pipeline_stage_started',
+          episodeId: episodeId.toString(),
+          stage: stageId,
+          runId,
+          backendJobId: response.job_id,
+        });
+        
+        return NextResponse.json({
+          message: `Started ${stageId} stage for episode ${episodeId}`,
+          episodeId,
+          runId,
+          stage: stageId,
+          backendJobId: response.job_id,
+        });
+        
+      } catch (apiError: any) {
+        console.error('Failed to start pipeline via FastAPI:', apiError);
+        
+        // Update pipeline run record with error
+        await prisma.pipelineRun.update({
+          where: { id: (await prisma.pipelineRun.findFirst({ where: { runId } }))?.id || 0 },
+          data: {
+            status: 'failed',
+            errorMessage: apiError.message || 'Failed to start pipeline',
+            completedAt: new Date(),
+          },
+        });
+        
+        // Emit error event
+        await eventEmitter.broadcast({
+          type: 'pipeline_stage_error',
+          episodeId: episodeId.toString(),
+          stage: stageId,
+          runId,
+          error: apiError.message || 'Failed to start pipeline',
+        });
+        
+        return NextResponse.json(
+          { error: apiError.message || 'Failed to start pipeline stage' },
+          { status: 500 }
+        );
       }
-      
-      taskProcess = spawn(pythonPath, args, {
-        cwd: join(process.cwd(), '..'), // Change to project root
-        env: {
-          ...process.env,
-          WDF_WEB_MODE: 'true',
-          WDF_USE_CLAUDE_PIPELINE: 'true',
-          WDF_EPISODE_ID: episodeId.toString(),
-          WDF_RUN_ID: runId,
-          WDF_CLAUDE_EPISODE_DIR: episode.claudeEpisodeDir || '',
-          // Strip Prisma-specific query parameters that psycopg2 doesn't understand
-          DATABASE_URL: (process.env.DATABASE_URL || '').split('?')[0],
-          WEB_URL: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-        },
-      });
     } else {
       // Use legacy pipeline tasks
       const stageToTaskMap = LEGACY_STAGE_TO_TASK;

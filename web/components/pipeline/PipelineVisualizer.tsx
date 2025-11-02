@@ -22,22 +22,21 @@ import {
   Loader2,
   FolderOpen
 } from 'lucide-react'
-import { 
-  PIPELINE_STAGES,
+import {
   CLAUDE_PIPELINE_STAGES,
-  LEGACY_PIPELINE_STAGES, 
-  PipelineStage as PipelineStageType,
   FileReference
 } from '@/lib/types/file-management'
 import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { FilePreviewDialog } from './FilePreviewDialog'
 import { FileUploadDialog } from './FileUploadDialog'
+import { apiClient } from '@/lib/api-client'
+import { useFastAPISSE } from '@/hooks/use-fastapi-sse'
 
 interface PipelineVisualizerProps {
   episodeId: number
   episodeTitle: string
-  pipelineType: 'claude' | 'legacy'
+  claudeEpisodeDir?: string | null // Claude episode directory name for FastAPI backend
 }
 
 interface FileData {
@@ -58,7 +57,7 @@ interface StageState {
   duration?: number
 }
 
-export function PipelineVisualizer({ episodeId, episodeTitle, pipelineType }: PipelineVisualizerProps) {
+export function PipelineVisualizer({ episodeId, episodeTitle, claudeEpisodeDir }: PipelineVisualizerProps) {
   const [files, setFiles] = useState<FileData>({})
   const [pipelineState, setPipelineState] = useState<Record<string, StageState>>({})
   const [fileConfig, setFileConfig] = useState<FileConfig | null>(null)
@@ -67,23 +66,75 @@ export function PipelineVisualizer({ episodeId, episodeTitle, pipelineType }: Pi
   const [uploadingFile, setUploadingFile] = useState<string | null>(null)
   const [runningStage, setRunningStage] = useState<string | null>(null)
 
-  // Get stages based on pipeline type
-  const getStages = () => {
-    return pipelineType === 'claude' ? CLAUDE_PIPELINE_STAGES : LEGACY_PIPELINE_STAGES
-  }
-
   const fetchFiles = useCallback(async () => {
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/files`)
-      if (!res.ok) throw new Error('Failed to fetch files')
-      
-      const data = await res.json()
-      setFiles(data.files || {})
-      setPipelineState(data.pipelineState?.stages || {})
-      setFileConfig(data.fileConfig || null)
+      // Use FastAPI backend if episode directory is available
+      if (claudeEpisodeDir) {
+        try {
+          const filesResponse = await apiClient.getEpisodeFiles(claudeEpisodeDir)
+          
+          // Transform FastAPI response to match expected format
+          const files: FileData = {}
+          const pipelineState: Record<string, StageState> = {}
+          
+          // Map files from FastAPI response
+          for (const file of filesResponse.files) {
+            // Map filename to file key
+            const fileKey = mapFilenameToKey(file.filename)
+            if (fileKey) {
+              files[fileKey] = {
+                key: fileKey,
+                path: file.filename,
+                exists: true,
+                size: file.size,
+                lastModified: new Date(file.modified),
+              }
+            }
+          }
+          
+          // Get pipeline status from FastAPI
+          const statusResponse = await apiClient.getPipelineStatus(claudeEpisodeDir)
+          
+          // Update pipeline state based on status
+          const stages = CLAUDE_PIPELINE_STAGES
+          stages.forEach(stage => {
+            pipelineState[stage.id] = {
+              status: statusResponse.status === 'completed' ? 'completed' : 
+                      statusResponse.status === 'failed' ? 'error' :
+                      statusResponse.status === 'started' ? 'running' : 'pending'
+            }
+          })
+          
+          setFiles(files)
+          setPipelineState(pipelineState)
+          setFileConfig({
+            episodeDir: claudeEpisodeDir,
+            files: {} as any
+          })
+        } catch (apiError) {
+          console.error('Failed to fetch files from FastAPI, falling back to Next.js API:', apiError)
+          // Fall back to Next.js API
+          const res = await fetch(`/api/episodes/${episodeId}/files`)
+          if (!res.ok) throw new Error('Failed to fetch files')
+          
+          const data = await res.json()
+          setFiles(data.files || {})
+          setPipelineState(data.pipelineState?.stages || {})
+          setFileConfig(data.fileConfig || null)
+        }
+      } else {
+        // Fall back to Next.js API when Claude directory is not available yet
+        const res = await fetch(`/api/episodes/${episodeId}/files`)
+        if (!res.ok) throw new Error('Failed to fetch files')
+        
+        const data = await res.json()
+        setFiles(data.files || {})
+        setPipelineState(data.pipelineState?.stages || {})
+        setFileConfig(data.fileConfig || null)
+      }
       
       // Check if any stage is running
-      const running = Object.entries(data.pipelineState?.stages || {}).find(
+      const running = Object.entries(pipelineState).find(
         ([_, state]: [string, any]) => state.status === 'running'
       )
       setRunningStage(running ? running[0] : null)
@@ -96,78 +147,141 @@ export function PipelineVisualizer({ episodeId, episodeTitle, pipelineType }: Pi
     } finally {
       setIsLoading(false)
     }
-  }, [episodeId])
+  }, [episodeId, claudeEpisodeDir])
+
+  // Helper function to map filename to file key
+  const mapFilenameToKey = (filename: string): string | null => {
+    const mapping: Record<string, string> = {
+      'transcript.txt': 'transcript',
+      'summary.md': 'summary',
+      'classified.json': 'classified',
+      'responses.json': 'responses',
+      'tweets.json': 'tweets',
+      'published.json': 'published',
+    }
+    return mapping[filename] || null
+  }
+
+  // Set up FastAPI SSE for Claude pipeline
+  useFastAPISSE({
+    episodeId: claudeEpisodeDir || '',
+    onMessage: (data) => {
+      if (claudeEpisodeDir) {
+        // Handle FastAPI events
+        if (data.type === 'pipeline.started' || data.type === 'pipeline_stage_started') {
+          const stage = data.data?.stage || data.stage
+          setRunningStage(stage)
+          fetchFiles()
+          toast({
+            title: 'Stage Started',
+            description: `${stage} stage has started`,
+          })
+        } else if (data.type === 'pipeline.completed' || data.type === 'pipeline_stage_completed') {
+          const stage = data.data?.stage || data.stage
+          setRunningStage(null)
+          fetchFiles()
+          toast({
+            title: 'Stage Completed',
+            description: `${stage} stage completed successfully`,
+          })
+        } else if (data.type === 'job.failed' || data.type === 'job_failed') {
+          setRunningStage(null)
+          fetchFiles()
+          toast({
+            title: 'Stage Failed',
+            description: data.data?.message || data.message || 'Pipeline stage failed',
+            variant: 'destructive'
+          })
+        }
+      }
+    },
+    onError: (error) => {
+      console.error('FastAPI SSE error:', error)
+    },
+    enabled: Boolean(claudeEpisodeDir)
+  })
 
   useEffect(() => {
     fetchFiles()
     
-    // Set up SSE for real-time updates
-    const eventSource = new EventSource("/api/events")
+    // Set up SSE for real-time updates when FastAPI directory is unavailable
+    if (!claudeEpisodeDir) {
+      const eventSource = new EventSource("/api/events")
 
-    eventSource.addEventListener("pipeline_stage_started", (event) => {
-      const data = JSON.parse(event.data)
-      if (data.episodeId === episodeId.toString()) {
-        setRunningStage(data.stage)
-        // Refresh files to update stage status
-        fetchFiles()
-        toast({
-          title: 'Stage Started',
-          description: `${data.stage} stage has started`,
-        })
+      eventSource.addEventListener("pipeline_stage_started", (event) => {
+        const data = JSON.parse(event.data)
+        if (data.episodeId === episodeId.toString()) {
+          setRunningStage(data.stage)
+          fetchFiles()
+          toast({
+            title: 'Stage Started',
+            description: `${data.stage} stage has started`,
+          })
+        }
+      })
+
+      eventSource.addEventListener("pipeline_stage_progress", (event) => {
+        const data = JSON.parse(event.data)
+        if (data.episodeId === episodeId.toString()) {
+          console.log(`[${data.stage}] ${data.output}`)
+        }
+      })
+
+      eventSource.addEventListener("pipeline_stage_error", (event) => {
+        const data = JSON.parse(event.data)
+        if (data.episodeId === episodeId.toString()) {
+          console.error(`[${data.stage}] ${data.error}`)
+          toast({
+            title: 'Stage Error',
+            description: `Error in ${data.stage} stage`,
+            variant: 'destructive'
+          })
+        }
+      })
+
+      eventSource.addEventListener("pipeline_stage_completed", (event) => {
+        const data = JSON.parse(event.data)
+        if (data.episodeId === episodeId.toString()) {
+          setRunningStage(null)
+          fetchFiles()
+          const success = data.status === 'completed'
+          toast({
+            title: success ? 'Stage Completed' : 'Stage Failed',
+            description: `${data.stage} stage ${success ? 'completed successfully' : 'failed'}`,
+            variant: success ? 'default' : 'destructive'
+          })
+        }
+      })
+
+      eventSource.addEventListener("error", (error) => {
+        console.error("SSE error:", error)
+      })
+
+      // Poll for updates while any stage is running (fallback)
+      const interval = setInterval(() => {
+        if (runningStage) {
+          fetchFiles()
+        }
+      }, 5000)
+
+      return () => {
+        eventSource.close()
+        clearInterval(interval)
       }
-    })
+    } else {
+      // For Claude pipeline, FastAPI SSE is handled by hook above
+      // Just set up polling fallback
+      const interval = setInterval(() => {
+        if (runningStage) {
+          fetchFiles()
+        }
+      }, 5000)
 
-    eventSource.addEventListener("pipeline_stage_progress", (event) => {
-      const data = JSON.parse(event.data)
-      if (data.episodeId === episodeId.toString()) {
-        // Progress updates could be used to show logs in real-time
-        console.log(`[${data.stage}] ${data.output}`)
+      return () => {
+        clearInterval(interval)
       }
-    })
-
-    eventSource.addEventListener("pipeline_stage_error", (event) => {
-      const data = JSON.parse(event.data)
-      if (data.episodeId === episodeId.toString()) {
-        console.error(`[${data.stage}] ${data.error}`)
-        toast({
-          title: 'Stage Error',
-          description: `Error in ${data.stage} stage`,
-          variant: 'destructive'
-        })
-      }
-    })
-
-    eventSource.addEventListener("pipeline_stage_completed", (event) => {
-      const data = JSON.parse(event.data)
-      if (data.episodeId === episodeId.toString()) {
-        setRunningStage(null)
-        // Refresh files to update stage status and outputs
-        fetchFiles()
-        const success = data.status === 'completed'
-        toast({
-          title: success ? 'Stage Completed' : 'Stage Failed',
-          description: `${data.stage} stage ${success ? 'completed successfully' : 'failed'}`,
-          variant: success ? 'default' : 'destructive'
-        })
-      }
-    })
-
-    eventSource.addEventListener("error", (error) => {
-      console.error("SSE error:", error)
-    })
-
-    // Poll for updates while any stage is running (fallback)
-    const interval = setInterval(() => {
-      if (runningStage) {
-        fetchFiles()
-      }
-    }, 5000) // Reduced frequency since SSE provides real-time updates
-
-    return () => {
-      eventSource.close()
-      clearInterval(interval)
     }
-  }, [episodeId, runningStage, fetchFiles])
+  }, [episodeId, claudeEpisodeDir, runningStage, fetchFiles])
 
   const runStage = async (stageId: string, useCached: boolean = false, forceRefresh: boolean = false) => {
     try {
@@ -279,7 +393,7 @@ export function PipelineVisualizer({ episodeId, episodeTitle, pipelineType }: Pi
         </AlertDescription>
       </Alert>
 
-      {getStages().map((stage, index) => {
+      {CLAUDE_PIPELINE_STAGES.map((stage) => {
         const stageState = pipelineState[stage.id] || { status: 'pending' }
         
         // Simple canRun logic based on stage requirements

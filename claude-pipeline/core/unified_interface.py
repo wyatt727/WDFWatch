@@ -134,6 +134,18 @@ class UnifiedInterface:
             if temperature is not None:
                 model.config.temperature = temperature
             
+            # Add episode summary reference to prompt if available and not already included
+            # (Some stages construct their own prompts with episode context, so check first)
+            if self.current_episode_context and self.current_episode_context.exists():
+                episode_ref = f"@{self.current_episode_context.resolve()}"
+                if episode_ref not in prompt:
+                    # Append episode context reference to prompt
+                    prompt = f"{prompt}\n\nHere is the episode summary for reference: {episode_ref}\nNote: Tweets can be relevant to either this specific episode OR the general themes of the WDF Podcast."
+            
+            # Set episode context on model if it's a ClaudeAdapter (for logging/debugging)
+            if hasattr(model, 'set_episode_context') and self.current_episode_context:
+                model.set_episode_context(str(self.current_episode_context))
+            
             # Call the model
             start_time = time.time()
             response = await model.generate(prompt, adapted_context, mode)
@@ -333,18 +345,27 @@ class UnifiedInterface:
             
             # Build prompt with @ reference (Claude CLI supports this)
             # The specialized CLAUDE.md already has all the instructions
+            # Add episode summary reference if available
+            episode_context_text = ""
+            if self.current_episode_context and self.current_episode_context.exists():
+                episode_context_text = f"\n\nHere is the episode summary for reference: @{self.current_episode_context.resolve()}\nNote: Tweets can be relevant to either this specific episode OR the general themes of the WDF Podcast."
+            
             if with_reasoning:
-                prompt = f"""Using the Reasoning Mode format, classify these tweets:
+                prompt = f"""Using the Reasoning Mode format, classify these tweets:{episode_context_text}
 
 @{tweets_file.resolve()}
 
 Output ONLY the scores and reasons in the exact format specified."""
             else:
-                prompt = f"""Using the Batch Mode format, classify these tweets:
+                prompt = f"""Using the Batch Mode format, classify these tweets:{episode_context_text}
 
 @{tweets_file.resolve()}
 
 Output ONLY one score per line, nothing else."""
+            
+            # Set episode context on model if it's a ClaudeAdapter (for logging/debugging)
+            if hasattr(model, 'set_episode_context') and self.current_episode_context:
+                model.set_episode_context(str(self.current_episode_context))
             
             # Get response
             response = await model.generate(prompt, adapted_context, 'classify')
@@ -494,8 +515,17 @@ Output ONLY one score per line, nothing else."""
                 max_context_length=model.get_context_limit()
             )
             
+            # Add episode summary reference to prompt if available
+            episode_context_text = ""
+            if self.current_episode_context and self.current_episode_context.exists():
+                episode_context_text = f"\n\nHere is the episode summary for reference: @{self.current_episode_context.resolve()}\nNote: Connect the tweet to either this specific episode OR the general themes of the WDF Podcast."
+            
+            # Set episode context on model if it's a ClaudeAdapter (for logging/debugging)
+            if hasattr(model, 'set_episode_context') and self.current_episode_context:
+                model.set_episode_context(str(self.current_episode_context))
+            
             prompt = f"""Generate a <200 character response to promote the WDF Podcast.
-Connect the tweet to episode themes and include the video URL.
+Connect the tweet to episode themes (if available) or general podcast themes, and include the video URL.{episode_context_text}
 
 TWEET TO RESPOND TO:
 {tweet}
@@ -570,7 +600,16 @@ RESPONSE:"""
                 max_context_length=model.get_context_limit()
             )
             
-            prompt = f"""Evaluate this response for quality and appropriateness.
+            # Add episode summary reference to prompt if available
+            episode_context_text = ""
+            if self.current_episode_context and self.current_episode_context.exists():
+                episode_context_text = f"\n\nHere is the episode summary for reference: @{self.current_episode_context.resolve()}"
+            
+            # Set episode context on model if it's a ClaudeAdapter (for logging/debugging)
+            if hasattr(model, 'set_episode_context') and self.current_episode_context:
+                model.set_episode_context(str(self.current_episode_context))
+            
+            prompt = f"""Evaluate this response for quality and appropriateness.{episode_context_text}
 
 ORIGINAL TWEET:
 {tweet}

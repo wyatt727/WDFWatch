@@ -75,11 +75,32 @@ class ClaudeAdapter(ModelInterface):
         
         self.cli_model = self._get_cli_model_name()
         
+        # Episode context path storage (for summary.md file reference)
+        self.episode_context_path = None  # Path to episode summary.md file
+        
         logger.info(f"Claude adapter initialized: {self.model_name} -> {self.cli_model}")
     
     def _get_cli_model_name(self) -> str:
         """Get the Claude CLI model name from config."""
         return self.model_mapping.get(self.model_name, 'sonnet')
+    
+    def set_episode_context(self, episode_context_path: Optional[str]):
+        """
+        Set the episode context file path for use in Claude CLI calls.
+        
+        This allows the adapter to add episode summary.md as an @ file reference
+        when invoking Claude CLI, providing episode-specific context alongside
+        the specialized CLAUDE.md instructions.
+        
+        Args:
+            episode_context_path: Path to episode summary.md file, or None to clear
+        """
+        if episode_context_path and Path(episode_context_path).exists():
+            self.episode_context_path = Path(episode_context_path).resolve()
+            logger.info(f"Episode context set: {self.episode_context_path}")
+        else:
+            self.episode_context_path = None
+            logger.debug("Episode context cleared")
     
     async def generate(self, 
                       prompt: str,
@@ -314,7 +335,7 @@ Summarize this transcript: @{temp_transcript}"""
                     # No file reference - will pass via stdin
                 ]
                 use_stdin = True
-                stdin_content = prompt  # Use the prompt directly
+                stdin_content = prompt  # Use the prompt directly (episode context included in prompt text)
             else:
                 # For other modes, use file reference
                 cmd = [
@@ -337,6 +358,8 @@ Summarize this transcript: @{temp_transcript}"""
             logger.info(f"Claude CLI command: {' '.join(cmd)}")
             logger.info(f"Working directory: {working_dir}")
             logger.info(f"CLI model: {self.cli_model}")
+            if self.episode_context_path:
+                logger.debug(f"Episode context available: {self.episode_context_path} (referenced in prompt)")
             if use_stdin:
                 logger.info(f"Using stdin for prompt ({len(stdin_content)} chars)")
             else:

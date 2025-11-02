@@ -34,7 +34,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
       status: true,
       uploadedAt: true,
       videoUrl: true,
-      pipelineType: true,
+      claudeEpisodeDir: true,
       keywords_entries: {
         where: { enabled: true },
         select: {
@@ -153,7 +153,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
           <PipelineVisualizer 
             episodeId={episode.id} 
             episodeTitle={episode.title}
-            pipelineType={(episode.pipelineType as 'claude' | 'legacy') || 'legacy'}
+            claudeEpisodeDir={episode.claudeEpisodeDir}
           />
         </CardContent>
       </Card>
