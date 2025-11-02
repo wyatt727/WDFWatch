@@ -148,10 +148,57 @@ def run(
     # Save outputs
     summary_file.write_text(result['summary'])
     logger.info(f"Saved summary to {summary_file}")
-    
-    with open(keywords_file, 'w') as f:
-        json.dump(result['keywords'], f, indent=2)
-    logger.info(f"Saved {len(result['keywords'])} keywords to {keywords_file}")
+
+    # Check if this is a keyword-based episode (preserve user's keywords)
+    # Try to find metadata in episode directory if episode_id provided
+    is_keyword_episode = False
+    metadata_file = None
+
+    if episode_id:
+        # Try to find episode directory
+        from src.wdf.episode_files import get_episode_file_manager
+        try:
+            file_manager = get_episode_file_manager(episode_id)
+            episode_dir = file_manager.episode_dir
+            metadata_file = episode_dir / "metadata.json"
+        except Exception as e:
+            logger.debug(f"Could not get episode directory: {e}")
+
+    # Fallback to transcripts directory
+    if metadata_file is None or not metadata_file.exists():
+        metadata_file = transcripts_dir / "metadata.json"
+
+    if metadata_file.exists():
+        try:
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+                is_keyword_episode = metadata.get('episodeType') == 'keyword_search'
+                logger.info(f"Detected episode type: {metadata.get('episodeType', 'normal')}")
+        except Exception as e:
+            logger.warning(f"Could not read metadata: {e}")
+
+    # Determine target directories for keywords
+    if episode_id and metadata_file and metadata_file != transcripts_dir / "metadata.json":
+        # Episode directory - save keywords there
+        keywords_target_file = episode_dir / "keywords.json"
+        extracted_keywords_target = episode_dir / "extracted_keywords.json"
+    else:
+        # Transcripts directory
+        keywords_target_file = keywords_file
+        extracted_keywords_target = transcripts_dir / "extracted_keywords.json"
+
+    if is_keyword_episode:
+        # For keyword-based episodes, save extracted keywords separately
+        # to preserve the user's manually specified keywords in keywords.json
+        with open(extracted_keywords_target, 'w') as f:
+            json.dump(result['keywords'], f, indent=2)
+        logger.info(f"Keyword-based episode detected - saved {len(result['keywords'])} extracted keywords to {extracted_keywords_target}")
+        logger.info(f"Preserving user's search keywords in {keywords_target_file}")
+    else:
+        # Normal episode - save keywords as usual
+        with open(keywords_target_file, 'w') as f:
+            json.dump(result['keywords'], f, indent=2)
+        logger.info(f"Saved {len(result['keywords'])} keywords to {keywords_target_file}")
     
     # Save hash for caching
     transcript_hash = hashlib.md5(transcript.encode()).hexdigest()
